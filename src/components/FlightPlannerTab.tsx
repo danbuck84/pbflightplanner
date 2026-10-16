@@ -74,8 +74,7 @@ interface FlightPlannerTabProps {
 const USEFUL_LINKS = [
   { label: 'Windy.com', url: 'https://www.windy.com/' },
   { label: 'AISWEB Cartas', url: 'https://aisweb.decea.mil.br/?i=cartas' },
-  { label: 'Gold Virtual', url: 'https://goldvirtual.com.br/' },
-  { label: 'Nexatlas', url: 'https://nexatlas.com/' },
+  { label: 'Beyond EFB', url: 'https://web.beyond.aero/' },
   { label: 'REDEMET', url: 'https://redemet.decea.mil.br/' },
 ];
 
