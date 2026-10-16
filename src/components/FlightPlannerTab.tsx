@@ -258,6 +258,45 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     });
   };
 
+  const closeRouteToDestination = () => {
+    const destIcao = plan.destination.icao.trim().toUpperCase();
+    if (!destIcao) return;
+
+    onUpdatePlan((prev) => {
+      const lastLeg = prev.legs[prev.legs.length - 1];
+      if (!lastLeg) return prev;
+
+      // If the last leg already ends at Destination, nothing to add
+      if (lastLeg.waypoint.trim().toUpperCase() === destIcao) {
+        return prev;
+      }
+
+      // If the last leg's waypoint is still blank, set it directly to Destination
+      if (!lastLeg.waypoint.trim()) {
+        const nextLegs = prev.legs.map((l, idx) =>
+          idx === prev.legs.length - 1 ? { ...l, waypoint: destIcao } : l
+        );
+        return { ...prev, legs: nextLegs };
+      }
+
+      // Otherwise, append the final leg from the last fix (e.g., ILHA ANCHIETA) to Destination (e.g., SDUB)
+      const finalLeg: RouteLeg = {
+        id: `leg-${Date.now()}`,
+        origin: lastLeg.waypoint.trim().toUpperCase(),
+        waypoint: destIcao,
+        distanceNm: '',
+        magneticCourse: '',
+        iasKts: lastLeg.iasKts || activeAircraft.defaultCruiseIasKts,
+        altitudeInput: lastLeg.altitudeInput || '',
+        isReaCorridor: lastLeg.isReaCorridor ?? false,
+        windDirection: lastLeg.windDirection ?? '',
+        windSpeedKts: lastLeg.windSpeedKts ?? '',
+        notes: 'Pouso no Destino',
+      };
+      return { ...prev, legs: [...prev.legs, finalLeg] };
+    });
+  };
+
   const copyWindToAllLegs = (windDirection: number | '', windSpeedKts: number | '') => {
     onUpdatePlan((prev) => ({
       ...prev,
@@ -899,6 +938,21 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
             <span className="inline-flex items-center gap-1 rounded-lg bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
               <AlertTriangle className="h-3.5 w-3.5" /> Altitude NOK
             </span>
+            {plan.destination.icao.trim() &&
+              plan.legs[plan.legs.length - 1]?.waypoint.trim().toUpperCase() !==
+                plan.destination.icao.trim().toUpperCase() && (
+                <button
+                  type="button"
+                  onClick={closeRouteToDestination}
+                  title="Adiciona automaticamente o trecho final do último fixo até o Aeródromo de Destino"
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>
+                    Fechar Rota p/ Destino ({plan.destination.icao.trim().toUpperCase()})
+                  </span>
+                </button>
+              )}
             <button
               type="button"
               onClick={addLeg}
@@ -914,8 +968,8 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <th className="py-2.5 px-2 text-left">Origem</th>
-                <th className="py-2.5 px-2 text-left">Trecho (Fixo/Portão)</th>
+                <th className="py-2.5 px-2 text-left">De (Origem / Fixo)</th>
+                <th className="py-2.5 px-2 text-left">Para (Fixo / Portão / Destino)</th>
                 <th className="py-2.5 px-1.5 text-center">Dist. (NM)</th>
                 <th className="py-2.5 px-1.5 text-center">Rumo Mag.</th>
                 <th className="py-2.5 px-1.5 text-center">VI / IAS (kt)</th>
@@ -946,10 +1000,19 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300'
                     : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950';
 
+                const isDestinationLeg =
+                  Boolean(plan.destination.icao.trim()) &&
+                  leg.waypoint.trim().toUpperCase() ===
+                    plan.destination.icao.trim().toUpperCase();
+
                 return (
                   <tr
                     key={leg.id}
-                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+                    className={
+                      isDestinationLeg
+                        ? 'bg-emerald-500/5 hover:bg-emerald-500/10'
+                        : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/40'
+                    }
                   >
                     <td className="py-1.5 px-2">
                       <input
@@ -962,15 +1025,22 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       />
                     </td>
                     <td className="py-1.5 px-2">
-                      <input
-                        type="text"
-                        value={leg.waypoint}
-                        onChange={(e) =>
-                          updateLeg(index, { waypoint: e.target.value.toUpperCase() })
-                        }
-                        placeholder="FIXO / ICAO"
-                        className="w-36 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 font-mono text-xs font-bold uppercase focus:border-sky-500 focus:outline-none"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={leg.waypoint}
+                          onChange={(e) =>
+                            updateLeg(index, { waypoint: e.target.value.toUpperCase() })
+                          }
+                          placeholder="FIXO / ICAO"
+                          className="w-36 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 font-mono text-xs font-bold uppercase focus:border-sky-500 focus:outline-none"
+                        />
+                        {isDestinationLeg && (
+                          <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                            DESTINO B
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-1.5 px-1.5 text-center">
                       <input
@@ -1136,8 +1206,49 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 );
               })}
 
+              {/* Prompt row if the last leg has not yet closed into Destination (B) */}
+              {plan.destination.icao.trim() &&
+                plan.legs[plan.legs.length - 1]?.waypoint.trim() &&
+                plan.legs[plan.legs.length - 1]?.waypoint.trim().toUpperCase() !==
+                  plan.destination.icao.trim().toUpperCase() && (
+                  <tr className="bg-emerald-500/10">
+                    <td colSpan={19} className="py-2 px-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          Falta fechar o último trecho da rota principal:{' '}
+                          <strong className="font-mono">
+                            {plan.legs[plan.legs.length - 1]?.waypoint.trim().toUpperCase()} →{' '}
+                            {plan.destination.icao.trim().toUpperCase()} (Destino B)
+                          </strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={closeRouteToDestination}
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-emerald-500"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>
+                            Inserir Trecho Final ({plan.legs[plan.legs.length - 1]?.waypoint.trim().toUpperCase()} →{' '}
+                            {plan.destination.icao.trim().toUpperCase()})
+                          </span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+              {/* Separator Banner for Alternate Leg (B -> C) */}
+              <tr className="border-t-2 border-amber-500/40 bg-amber-500/15">
+                <td
+                  colSpan={19}
+                  className="py-1.5 px-3 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300"
+                >
+                  ↳ Trecho de Alternativa (B → C): Voo do Destino ({plan.destination.icao || 'DEST'}) até o Aeródromo Alternativo ({plan.alternate.icao || 'ALT'})
+                </td>
+              </tr>
+
               {/* Alternate Leg Row (Row 43: SDAM DESTINO -> SDTF ALTERNATIVO) */}
-              <tr className="border-t-2 border-amber-500/30 bg-amber-500/5">
+              <tr className="bg-amber-500/5">
                 <td className="py-2 px-2 font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
                   {plan.destination.icao || 'DEST'} (DESTINO)
                 </td>
