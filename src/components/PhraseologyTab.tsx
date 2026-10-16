@@ -143,41 +143,20 @@ function toPhonetic(raw: string): string {
 }
 
 /**
- * Converts a radio frequency like "121.90" or "118,5" into full phonetic words + numeric reference.
- * Example: "121.90" -> "UNO DOIS UNO DECIMAL NOVE ZERO (121.90)"
+ * Formats a radio frequency as a clean numeric string (e.g. "121.90").
  */
-function formatFrequencyPhonetic(rawFreq?: string, placeholder = 'XXX.XX'): string {
+function formatFrequencyNumeric(rawFreq?: string, placeholder = 'XXX.XX'): string {
   const trimmed = (rawFreq || '').trim().replace(',', '.');
-  if (!trimmed) return placeholder;
-  const parts: string[] = [];
-  for (const ch of trimmed.toUpperCase()) {
-    if (ch === '.') {
-      parts.push('DECIMAL');
-    } else if (PHONETIC_MAP[ch]) {
-      parts.push(PHONETIC_MAP[ch]);
-    }
-  }
-  if (parts.length === 0) return trimmed;
-  return `${parts.join(' ')} (${trimmed})`;
+  return trimmed || placeholder;
 }
 
 /**
- * Converts runway designator (e.g. "15", "33", "09R") into phonetic words.
- * Example: "15" -> "UNO CINCO", "09R" -> "ZERO NOVE DIREITA"
+ * Formats runway designator cleanly (e.g. "15", "33", "09R").
  */
-function formatRunwayPhonetic(rawRwy?: string): string {
+function formatRunwayClean(rawRwy?: string): string {
   const trimmed = (rawRwy || '').trim().toUpperCase();
   if (!trimmed || trimmed === 'XX' || trimmed === '—') return 'XX';
-  // If it contains "OU" (e.g. "15 ou 33 - Vento Través"), take the first runway designator
-  const primary = trimmed.split(/\s+/)[0];
-  const words: string[] = [];
-  for (const ch of primary) {
-    if (ch === 'R') words.push('DIREITA');
-    else if (ch === 'L') words.push('ESQUERDA');
-    else if (ch === 'C') words.push('CENTRO');
-    else if (PHONETIC_MAP[ch]) words.push(PHONETIC_MAP[ch]);
-  }
-  return words.length > 0 ? `${words.join(' ')} (${primary})` : trimmed;
+  return trimmed.split(/\s+/)[0];
 }
 
 /**
@@ -254,7 +233,7 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
     ? toPhonetic(rawCallsign)
     : 'DELTA UNO UNO QUATRO LIMA CHARLIE';
 
-  // Abbreviated callsign (first letter + last 2 or last 3 characters) spoken phonetically
+  // Abbreviated callsign (last 3 characters) spoken phonetically
   const cleanAlnumCallsign = rawCallsign.replace(/[^A-Z0-9]/g, '');
   const shortRaw =
     cleanAlnumCallsign.length >= 3 ? cleanAlnumCallsign.slice(-3) : cleanAlnumCallsign;
@@ -270,40 +249,32 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
   const originSpokenName = getSpokenAerodromeName(originIcao, originAerodrome);
   const destSpokenName = getSpokenAerodromeName(destIcao, destinationAerodrome);
 
-  // Alternate aerodrome is always spelled out letter-by-letter phonetically in readbacks
+  // Alternate aerodrome is spelled out letter-by-letter phonetically in readbacks
   const altSpelledPhonetic = altIcao
     ? `${toPhonetic(altIcao)} (${altIcao})`
     : 'SIERRA BRAVO TANGO ALFA';
 
-  // Runways in phonetic
-  const depRwyPhonetic = formatRunwayPhonetic(originActiveRunway);
-  const arrRwyPhonetic = formatRunwayPhonetic(destinationActiveRunway);
+  // Runways (numeric/standard designator)
+  const depRwy = formatRunwayClean(originActiveRunway);
+  const arrRwy = formatRunwayClean(destinationActiveRunway);
 
-  // QNH in phonetic
+  // QNH (kept numeric, not phonetic text)
   const rawQnhOrigin =
-    plan.origin.qnhHpa !== '' ? String(plan.origin.qnhHpa) : '';
-  const qnhOriginPhonetic = rawQnhOrigin
-    ? `${toPhonetic(rawQnhOrigin)} (${rawQnhOrigin})`
-    : 'UNO ZERO UNO ZERO (1010)';
-
+    plan.origin.qnhHpa !== '' ? String(plan.origin.qnhHpa) : '1010';
   const rawQnhDest =
     plan.destination.qnhHpa !== ''
       ? String(plan.destination.qnhHpa)
       : rawQnhOrigin;
-  const qnhDestPhonetic = rawQnhDest
-    ? `${toPhonetic(rawQnhDest)} (${rawQnhDest})`
-    : 'UNO ZERO UNO ZERO (1010)';
 
-  // POB in phonetic
+  // POB (numeric)
   const pobNum = String(plan.crewCount || 1);
-  const pobPhonetic = toPhonetic(pobNum) || 'UNO';
 
-  // Flight Rule spoken
+  // Flight Rule
   const flightRule = plan.flightRule || 'VFR';
   const flightRuleSpoken =
-    flightRule === 'VFR' ? 'VISUAL (VICTOR FOXTROT ROMEU)' : 'POR INSTRUMENTOS (INDIA FOXTROT ROMEU)';
+    flightRule === 'VFR' ? 'VISUAL (VFR)' : 'POR INSTRUMENTOS (IFR)';
 
-  // Altitude / Flight Level in phonetic (e.g. A053 -> ZERO CINCO TRÊS)
+  // Altitude / Flight Level in phonetic (e.g. A053 -> ZERO CINCO TRÊS (A053))
   const rawAltDigits = predominantAltitudeCode
     ? predominantAltitudeCode.replace(/^(FL|A|F)/i, '')
     : '';
@@ -311,16 +282,14 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
     ? `${toPhonetic(rawAltDigits)} (${predominantAltitudeCode})`
     : 'ZERO CINCO CINCO';
 
-  // Endurance spoken phonetically
+  // Endurance (kept numeric HH:MM)
   const hasEndurance =
     totalEnduranceFormatted && totalEnduranceFormatted !== '00:00:00';
   const enduranceParts = totalEnduranceFormatted.split(':');
-  const enduranceSpoken =
+  const enduranceDisplay =
     hasEndurance && enduranceParts.length >= 2
-      ? `${toPhonetic(String(Number(enduranceParts[0])))} HORA(S) E ${toPhonetic(
-          enduranceParts[1]
-        )} MINUTOS (${enduranceParts[0]}:${enduranceParts[1]})`
-      : 'TRÊS HORAS E ZERO ZERO MINUTOS';
+      ? `${enduranceParts[0]}:${enduranceParts[1]}`
+      : '03:00';
 
   // Derive exit and approach waypoints directly from the Route Legs (Section 6) or scratchpad override
   const validWaypoints = plan.legs
@@ -335,7 +304,7 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
     (plan.starOrApproachProfile || '').trim().toUpperCase() ||
     (validWaypoints.length > 0 ? validWaypoints[validWaypoints.length - 1] : 'APROXIMAÇÃO VISUAL');
 
-  // --- Frequencies & Readback Values from Pilot's Scratchpad ---
+  // --- Frequencies & Readback Values from Pilot's Scratchpad (numeric) ---
   const originAtisLetterPhonetic = plan.originAtisLetter?.trim()
     ? toPhonetic(plan.originAtisLetter.trim()[0])
     : '';
@@ -343,38 +312,32 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
     ? toPhonetic(plan.arrivalAtisLetter.trim()[0])
     : '';
 
-  const freqTrafficOrigin = formatFrequencyPhonetic(plan.departureFreqTraffic, 'XXX.XX');
-  const freqGroundOrigin = formatFrequencyPhonetic(plan.departureFreqGround, 'XXX.XX');
-  const freqTowerOrigin = formatFrequencyPhonetic(plan.departureFreqTower, 'XXX.XX');
-  const freqRadioOrigin = formatFrequencyPhonetic(plan.departureFreqRadio, 'XXX.XX');
+  const freqTrafficOrigin = formatFrequencyNumeric(plan.departureFreqTraffic, 'XXX.XX');
+  const freqGroundOrigin = formatFrequencyNumeric(plan.departureFreqGround, 'XXX.XX');
+  const freqTowerOrigin = formatFrequencyNumeric(plan.departureFreqTower, 'XXX.XX');
 
   const depAppName = plan.departureAppName?.trim() || originSpokenName;
-  const freqAppDep = formatFrequencyPhonetic(plan.departureFreqApp, 'XXX.XX');
+  const freqAppDep = formatFrequencyNumeric(plan.departureFreqApp, 'XXX.XX');
 
   const centerName = plan.enrouteCenterName?.trim() || 'Brasília / Curitiba';
-  const freqCenter = formatFrequencyPhonetic(plan.enrouteFreqCenter, 'XXX.XX');
+  const freqCenter = formatFrequencyNumeric(plan.enrouteFreqCenter, 'XXX.XX');
 
   const arrAppName = plan.arrivalAppName?.trim() || destSpokenName;
-  const freqAppArr = formatFrequencyPhonetic(plan.arrivalFreqApp, 'XXX.XX');
+  const freqAppArr = formatFrequencyNumeric(plan.arrivalFreqApp, 'XXX.XX');
 
-  const freqRadioDest = formatFrequencyPhonetic(plan.arrivalFreqRadio, 'XXX.XX');
-  const freqTowerDest = formatFrequencyPhonetic(plan.arrivalFreqTower, 'XXX.XX');
-  const freqGroundDest = formatFrequencyPhonetic(plan.arrivalFreqGround, 'XXX.XX');
-  const freqAlternate = formatFrequencyPhonetic(plan.alternateFreq, 'XXX.XX');
-  const freqUnicom = formatFrequencyPhonetic(plan.unicomFreq || '122.80', 'UNO DOIS DOIS DECIMAL OITO ZERO (122.80)');
+  const freqRadioDest = formatFrequencyNumeric(plan.arrivalFreqRadio, 'XXX.XX');
+  const freqTowerDest = formatFrequencyNumeric(plan.arrivalFreqTower, 'XXX.XX');
+  const freqGroundDest = formatFrequencyNumeric(plan.arrivalFreqGround, 'XXX.XX');
+  const freqAlternate = formatFrequencyNumeric(plan.alternateFreq, 'XXX.XX');
+  const freqUnicom = formatFrequencyNumeric(plan.unicomFreq || '122.80', '122.80');
 
-  const squawkPhonetic = plan.transponderCode?.trim()
-    ? `${toPhonetic(plan.transponderCode.trim())} (${plan.transponderCode.trim()})`
-    : 'QUATRO DOIS CINCO UNO (XXXX)';
+  // Transponder kept as numeric digits
+  const squawkNumeric = plan.transponderCode?.trim() || '2000';
 
   const parkingOrigin = plan.parkingStand?.trim() || 'PÁTIO PRINCIPAL';
-  const taxiwaysOrigin = plan.originTaxiways?.trim()
-    ? `${toPhonetic(plan.originTaxiways.trim())} (${plan.originTaxiways.trim().toUpperCase()})`
-    : 'ALFA';
+  const taxiwaysOrigin = plan.originTaxiways?.trim().toUpperCase() || 'ALFA';
 
-  const taxiwaysDest = plan.arrivalTaxiways?.trim()
-    ? `${toPhonetic(plan.arrivalTaxiways.trim())} (${plan.arrivalTaxiways.trim().toUpperCase()})`
-    : 'ALFA';
+  const taxiwaysDest = plan.arrivalTaxiways?.trim().toUpperCase() || 'ALFA';
   const parkingDest = plan.arrivalParkingStand?.trim() || 'PÁTIO GERAL';
 
   const clearFrequenciesScratchpad = () => {
@@ -630,18 +593,23 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             </h3>
             <div className="grid grid-cols-2 gap-2.5 text-xs">
               <div>
-                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                  Transponder (Squawk):
+                <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  Transponder (Squawk Nº):
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={4}
                   value={plan.transponderCode || ''}
                   onChange={(e) =>
-                    onUpdatePlan((p) => ({ ...p, transponderCode: e.target.value }))
+                    onUpdatePlan((p) => ({
+                      ...p,
+                      transponderCode: e.target.value.replace(/\D/g, '').slice(0, 4),
+                    }))
                   }
-                  placeholder="Ex: 4251"
-                  className="mt-1 w-full rounded-lg border border-amber-500/50 bg-white dark:bg-slate-950 px-2.5 py-1 font-mono text-xs font-bold text-amber-600 dark:text-amber-400"
+                  placeholder="Ex: 2000"
+                  className="mt-1 w-full rounded-lg border-2 border-amber-500/60 bg-white dark:bg-slate-950 px-2.5 py-1 font-mono text-xs font-extrabold tracking-widest text-amber-600 dark:text-amber-400"
                 />
               </div>
               <div>
@@ -896,11 +864,11 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, autorizado para ${destSpokenName}, regra de voo ${flightRuleSpoken}, saída ${exitProfile}, nível de voo ${altPhoneticDigits}, pista em uso ${depRwyPhonetic}, acione transponder ${squawkPhonetic}, ajuste de altímetro ${qnhOriginPhonetic}, chame o Solo ${originSpokenName} na frequência ${freqGroundOrigin}.`,
+                text: `${callsignPhonetic}, autorizado para ${destSpokenName}, regra de voo ${flightRuleSpoken}, saída ${exitProfile}, nível de voo ${altPhoneticDigits}, pista em uso ${depRwy}, acione transponder ${squawkNumeric}, ajuste de altímetro ${rawQnhOrigin}, chame o Solo ${originSpokenName} na frequência ${freqGroundOrigin}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Cotejando: autorizado para ${destSpokenName}, voo ${flightRuleSpoken}, saída ${exitProfile}, nível ${altPhoneticDigits}, pista em uso ${depRwyPhonetic}, transponder ${squawkPhonetic}, ajuste ${qnhOriginPhonetic}, e chamará o Solo ${originSpokenName} na frequência ${freqGroundOrigin}, ${callsignPhonetic}.`,
+                text: `Cotejando: autorizado para ${destSpokenName}, voo ${flightRuleSpoken}, saída ${exitProfile}, nível ${altPhoneticDigits}, pista em uso ${depRwy}, transponder ${squawkNumeric}, ajuste ${rawQnhOrigin}, e chamará o Solo ${originSpokenName} na frequência ${freqGroundOrigin}, ${callsignPhonetic}.`,
               },
             ]}
           />
@@ -926,15 +894,15 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
               },
               {
                 speaker: 'PILOTO',
-                text: `Solo ${originSpokenName}, ${callsignPhonetic} pronto para o táxi, com ${pobPhonetic} pessoa(s) a bordo, autonomia de ${enduranceSpoken}, alternado ${altSpelledPhonetic}.`,
+                text: `Solo ${originSpokenName}, ${callsignPhonetic} pronto para o táxi, com ${pobNum} pessoa(s) a bordo, autonomia de ${enduranceDisplay}, alternado ${altSpelledPhonetic}.`,
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, autorizado táxi via taxiway ${taxiwaysOrigin} até o ponto de espera da pista ${depRwyPhonetic}, ajuste de altímetro ${qnhOriginPhonetic}, no ponto de espera chame a Torre ${originSpokenName} na frequência ${freqTowerOrigin}.`,
+                text: `${callsignPhonetic}, autorizado táxi via taxiway ${taxiwaysOrigin} até o ponto de espera da pista ${depRwy}, ajuste de altímetro ${rawQnhOrigin}, no ponto de espera chame a Torre ${originSpokenName} na frequência ${freqTowerOrigin}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Autorizado táxi via ${taxiwaysOrigin} até o ponto de espera da pista ${depRwyPhonetic}, ajuste ${qnhOriginPhonetic}, chamará a Torre ${originSpokenName} na frequência ${freqTowerOrigin}, ${callsignPhonetic}.`,
+                text: `Autorizado táxi via ${taxiwaysOrigin} até o ponto de espera da pista ${depRwy}, ajuste ${rawQnhOrigin}, chamará a Torre ${originSpokenName} na frequência ${freqTowerOrigin}, ${callsignPhonetic}.`,
               },
             ]}
           />
@@ -946,23 +914,23 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Torre ${originSpokenName}, ${callsignPhonetic}, no ponto de espera da pista ${depRwyPhonetic}, pronto para decolagem.`,
+                text: `Torre ${originSpokenName}, ${callsignPhonetic}, no ponto de espera da pista ${depRwy}, pronto para decolagem.`,
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, autorizado alinhar e manter na pista ${depRwyPhonetic}, aguarde autorização de decolagem.`,
+                text: `${callsignPhonetic}, autorizado alinhar e manter na pista ${depRwy}, aguarde autorização de decolagem.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Alinha e mantém na pista ${depRwyPhonetic}, ${shortCallsignPhonetic}.`,
+                text: `Alinha e mantém na pista ${depRwy}, ${shortCallsignPhonetic}.`,
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, vento calmo/operacional, livre decolagem na pista ${depRwyPhonetic}, após a decolagem chame o Controle ${depAppName} na frequência ${freqAppDep}.`,
+                text: `${callsignPhonetic}, vento calmo/operacional, livre decolagem na pista ${depRwy}, após a decolagem chame o Controle ${depAppName} na frequência ${freqAppDep}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Livre decolagem pista ${depRwyPhonetic}, após a decolagem chamará o Controle ${depAppName} na frequência ${freqAppDep}, ${callsignPhonetic}.`,
+                text: `Livre decolagem pista ${depRwy}, após a decolagem chamará o Controle ${depAppName} na frequência ${freqAppDep}, ${callsignPhonetic}.`,
               },
             ]}
           />
@@ -974,7 +942,7 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Controle ${depAppName}, ${callsignPhonetic}, decolado de ${originSpokenName} pista ${depRwyPhonetic}, cumprindo perfil ${exitProfile}, subindo para o nível ${altPhoneticDigits}, na sua escuta.`,
+                text: `Controle ${depAppName}, ${callsignPhonetic}, decolado de ${originSpokenName} pista ${depRwy}, cumprindo perfil ${exitProfile}, subindo para o nível ${altPhoneticDigits}, na sua escuta.`,
               },
               {
                 speaker: 'ATC',
@@ -1030,17 +998,17 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Controle ${arrAppName}, ${callsignPhonetic}, na sua escuta, ciente do ajuste ${qnhDestPhonetic}${
+                text: `Controle ${arrAppName}, ${callsignPhonetic}, na sua escuta, ciente do ajuste ${rawQnhDest}${
                   destAtisLetterPhonetic ? ` e informação ${destAtisLetterPhonetic}` : ''
                 }.`,
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, desça via ${approachProfile} sob vigilância radar para a pista em uso ${arrRwyPhonetic} de ${destSpokenName}, ajuste de altímetro ${qnhDestPhonetic}.`,
+                text: `${callsignPhonetic}, desça via ${approachProfile} sob vigilância radar para a pista em uso ${arrRwy} de ${destSpokenName}, ajuste de altímetro ${rawQnhDest}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Desce via ${approachProfile} para a pista ${arrRwyPhonetic}, no ajuste ${qnhDestPhonetic}, ${shortCallsignPhonetic}.`,
+                text: `Desce via ${approachProfile} para a pista ${arrRwy}, no ajuste ${rawQnhDest}, ${shortCallsignPhonetic}.`,
               },
               {
                 speaker: 'ATC',
@@ -1060,15 +1028,15 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Torre ${destSpokenName}, ${callsignPhonetic}, ingressando na perna do vento / final da pista ${arrRwyPhonetic}, trem de pouso baixado e travado.`,
+                text: `Torre ${destSpokenName}, ${callsignPhonetic}, ingressando na perna do vento / final da pista ${arrRwy}, trem de pouso baixado e travado.`,
               },
               {
                 speaker: 'ATC',
-                text: `${callsignPhonetic}, pouso autorizado na pista ${arrRwyPhonetic}.`,
+                text: `${callsignPhonetic}, pouso autorizado na pista ${arrRwy}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Pouso autorizado na pista ${arrRwyPhonetic}, ${shortCallsignPhonetic}.`,
+                text: `Pouso autorizado na pista ${arrRwy}, ${shortCallsignPhonetic}.`,
               },
               {
                 speaker: 'ATC',
@@ -1088,7 +1056,7 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Solo ${destSpokenName}, ${callsignPhonetic}, pista ${arrRwyPhonetic} livrada na taxiway ${taxiwaysDest}, solicita táxi para o ${parkingDest}.`,
+                text: `Solo ${destSpokenName}, ${callsignPhonetic}, pista ${arrRwy} livrada na taxiway ${taxiwaysDest}, solicita táxi para o ${parkingDest}.`,
               },
               {
                 speaker: 'ATC',
@@ -1110,21 +1078,21 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
             dialogues={[
               {
                 speaker: 'PILOTO',
-                text: `Tráfego de ${originSpokenName} na frequência ${freqUnicom}, ${callsignPhonetic}, iniciando táxi do ${parkingOrigin} para o ponto de espera da pista ${depRwyPhonetic}.`,
+                text: `Tráfego de ${originSpokenName} na frequência ${freqUnicom}, ${callsignPhonetic}, iniciando táxi do ${parkingOrigin} para o ponto de espera da pista ${depRwy}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Tráfego de ${originSpokenName}, ${callsignPhonetic}, alinhando e decolando da pista ${depRwyPhonetic}, subindo para o nível ${altPhoneticDigits} na proa de ${exitProfile}.`,
+                text: `Tráfego de ${originSpokenName}, ${callsignPhonetic}, alinhando e decolando da pista ${depRwy}, subindo para o nível ${altPhoneticDigits} na proa de ${exitProfile}.`,
               },
               {
                 speaker: 'PILOTO',
                 text: `Tráfego de ${destSpokenName} (em ${
                   plan.arrivalFreqRadio ? freqRadioDest : freqUnicom
-                }), ${callsignPhonetic}, a UNO ZERO milhas, ingressando no circuito de tráfego para pouso na pista ${arrRwyPhonetic}, ajuste ${qnhDestPhonetic}.`,
+                }), ${callsignPhonetic}, a 10 milhas, ingressando no circuito de tráfego para pouso na pista ${arrRwy}, ajuste ${rawQnhDest}.`,
               },
               {
                 speaker: 'PILOTO',
-                text: `Tráfego de ${destSpokenName}, ${callsignPhonetic}, na final curta da pista ${arrRwyPhonetic} para pouso (ou arremetendo e prosseguindo para o alternado ${altSpelledPhonetic} na frequência ${freqAlternate}).`,
+                text: `Tráfego de ${destSpokenName}, ${callsignPhonetic}, na final curta da pista ${arrRwy} para pouso (ou arremetendo e prosseguindo para o alternado ${altSpelledPhonetic} na frequência ${freqAlternate}).`,
               },
             ]}
           />
@@ -1142,15 +1110,21 @@ export const PhraseologyTab: React.FC<PhraseologyTabProps> = ({
               </div>
               <div className="space-y-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-xs">
                 <div>
-                  <span className="text-[10px] uppercase text-slate-400">Callsign Completo:</span>
+                  <span className="text-[10px] uppercase text-slate-400">Callsign Completo (Fonético):</span>
                   <div className="font-mono font-bold text-sky-600 dark:text-sky-400">
                     {callsignPhonetic}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase text-slate-400">Callsign Abreviado:</span>
+                  <span className="text-[10px] uppercase text-slate-400">Callsign Abreviado (Fonético):</span>
                   <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                     {shortCallsignPhonetic}
+                  </div>
+                </div>
+                <div className="border-t border-slate-200/70 dark:border-slate-700/60 pt-2">
+                  <span className="text-[10px] uppercase text-slate-400">Altitude / Nível (Fonético):</span>
+                  <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {altPhoneticDigits}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 border-t border-slate-200/70 dark:border-slate-700/60 pt-2">
