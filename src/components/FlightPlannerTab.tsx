@@ -1370,12 +1370,34 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2">
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold uppercase text-slate-400">
-                  Remark (Item 18 — OPR / PER / RMK)
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">
+                    Remark (Item 18 — OPR / PER / RMK)
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-semibold text-slate-400">OPR/:</span>
+                    <input
+                      type="text"
+                      value={
+                        !plan.operatorRemark ||
+                        plan.operatorRemark.toUpperCase().includes('GOLD')
+                          ? 'PARTICULAR'
+                          : plan.operatorRemark
+                      }
+                      onChange={(e) =>
+                        onUpdatePlan((p) => ({
+                          ...p,
+                          operatorRemark: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      placeholder="PARTICULAR"
+                      className="w-32 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-slate-700 dark:text-slate-200"
+                    />
+                  </div>
                 </div>
-                <div className="truncate font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">
+                <div className="mt-0.5 truncate font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">
                   {remarkString}
                 </div>
               </div>

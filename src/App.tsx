@@ -205,12 +205,20 @@ export const App: React.FC = () => {
             fetchUserAerodromes(user.uid),
           ]);
           if (cloudPlans.length > 0) {
-            setSavedPlans(cloudPlans);
-            localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(cloudPlans));
+            const sanitizedPlans = cloudPlans.map(sanitizeFlightPlan);
+            setSavedPlans(sanitizedPlans);
+            localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(sanitizedPlans));
           }
           if (cloudFleet.length > 0) {
-            setUserFleet(cloudFleet);
-            localStorage.setItem(LOCAL_STORAGE_KEYS.USER_FLEET, JSON.stringify(cloudFleet));
+            const sanitizedFleet = cloudFleet.map((f) => ({
+              ...f,
+              operatorName:
+                !f.operatorName || f.operatorName.toUpperCase().includes('GOLD')
+                  ? 'PARTICULAR'
+                  : f.operatorName,
+            }));
+            setUserFleet(sanitizedFleet);
+            localStorage.setItem(LOCAL_STORAGE_KEYS.USER_FLEET, JSON.stringify(sanitizedFleet));
           }
           if (cloudAeros.length > 0) {
             setCustomAerodromes(cloudAeros);
