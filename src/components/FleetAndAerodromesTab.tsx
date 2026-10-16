@@ -585,8 +585,8 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   >
                     {baseAircraftList.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name} ({b.icaoCode}) — Cruzeiro {b.defaultCruiseIasKts} kt • Descida{' '}
-                        {b.defaultDescentIasKts} kt / {b.defaultDescentVsFpm} fpm • {b.fuelConsumptionLph} L/h
+                        {b.name} ({b.icaoCode}) — Cruzeiro {b.defaultCruiseIasKts} kts • Descida{' '}
+                        {b.defaultDescentIasKts} kts / {b.defaultDescentVsFpm} fpm • {b.fuelConsumptionLph} L/h
                       </option>
                     ))}
                   </select>
@@ -932,7 +932,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Vel. Média Subida (kt):
+                        Vel. Média Subida (kts):
                       </label>
                       <input
                         type="number"
@@ -982,7 +982,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Velocidade de Cruzeiro (kt):
+                        Velocidade de Cruzeiro (kts):
                       </label>
                       <input
                         type="number"
@@ -1023,7 +1023,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Vel. Média Descida (kt):
+                        Vel. Média Descida (kts):
                       </label>
                       <input
                         type="number"
@@ -1080,7 +1080,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Vel. Média Alternativo (kt):
+                        Vel. Média Alternativo (kts):
                       </label>
                       <input
                         type="number"
@@ -1140,7 +1140,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                     rows={6}
                     value={draft.notes}
                     onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-                    placeholder="Ex: Cruzeiro a 65% BHP (2500 RPM), mistura empobrecida 50°F ROP. Velocidade de melhor razão de subida Vy 88 kt."
+                    placeholder="Ex: Cruzeiro a 65% BHP (2500 RPM), mistura empobrecida 50°F ROP. Velocidade de melhor razão de subida Vy 88 kts."
                     className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3 text-xs leading-relaxed"
                   />
                 </div>
@@ -1312,7 +1312,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                     <div className="mt-3 grid grid-cols-4 gap-1.5 rounded-lg bg-white dark:bg-slate-900/80 p-2.5 text-center text-xs">
                       <div>
                         <div className="text-[10px] text-slate-400">Cruzeiro</div>
-                        <div className="font-mono font-semibold">{p.defaultCruiseIasKts} kt</div>
+                        <div className="font-mono font-semibold">{p.defaultCruiseIasKts} kts</div>
                       </div>
                       <div>
                         <div className="text-[10px] text-slate-400">Consumo</div>
@@ -1321,7 +1321,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                       <div>
                         <div className="text-[10px] text-slate-400">Descida</div>
                         <div className="font-mono font-semibold">
-                          {p.defaultDescentIasKts} kt / {p.defaultDescentVsFpm}
+                          {p.defaultDescentIasKts} kts / {p.defaultDescentVsFpm}
                         </div>
                       </div>
                       <div>
@@ -1434,10 +1434,10 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                     </td>
                     <td className="py-2.5 px-3 font-mono">{ac.performanceCategory}</td>
                     <td className="py-2.5 px-3 font-mono font-semibold">
-                      {ac.defaultCruiseIasKts} kt
+                      {ac.defaultCruiseIasKts} kts
                     </td>
                     <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-300">
-                      {ac.defaultDescentIasKts} kt / -{ac.defaultDescentVsFpm} fpm
+                      {ac.defaultDescentIasKts} kts / -{ac.defaultDescentVsFpm} fpm
                     </td>
                     <td className="py-2.5 px-3 font-mono">{ac.fuelConsumptionLph} L/h</td>
                     <td className="py-2.5 px-3">{normalizeCapacityLiters(ac.fuelCapacityDisplay)}</td>

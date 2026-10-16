@@ -354,8 +354,16 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     if (val.startsWith('prefix:')) {
       const prefixId = val.replace('prefix:', '');
       const found = userFleet.find((p) => p.id === prefixId);
-      const newCruiseIas = found?.defaultCruiseIasKts || 110;
-      const newAltIas = found?.alternateSpeedKts || found?.defaultDescentIasKts || newCruiseIas;
+      const baseFallback = baseAircraftList.find((b) => b.id === found?.baseAircraftId);
+      const newCruiseIas = found?.defaultCruiseIasKts || baseFallback?.defaultCruiseIasKts || 110;
+      const newDescentIas =
+        found?.defaultDescentIasKts ||
+        baseFallback?.defaultDescentIasKts ||
+        Math.round(newCruiseIas * 0.9);
+      const newDescentVs =
+        found?.defaultDescentVsFpm || baseFallback?.defaultDescentVsFpm || 600;
+      const newAltIas =
+        found?.alternateSpeedKts || baseFallback?.alternateSpeedKts || newDescentIas;
       onUpdatePlan((prev) => ({
         ...prev,
         selectedAircraftSource: 'prefix',
@@ -363,46 +371,42 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
         operatorRemark: found?.operatorName || prev.operatorRemark,
         legs: prev.legs.map((l) => ({
           ...l,
-          iasKts:
-            l.iasKts === '' || l.iasKts === activeAircraft.defaultCruiseIasKts
-              ? newCruiseIas
-              : l.iasKts,
+          iasKts: newCruiseIas,
         })),
         alternateLeg: {
           ...prev.alternateLeg,
           iasKts: newAltIas,
         },
-        descentSpeedKts: '',
-        descentVerticalSpeedFpm: '',
-        alternateDescentSpeedKts: '',
-        alternateDescentVerticalSpeedFpm: '',
-        dmeArcEntrySpeedKts: '',
+        descentSpeedKts: newDescentIas,
+        descentVerticalSpeedFpm: newDescentVs,
+        alternateDescentSpeedKts: newAltIas,
+        alternateDescentVerticalSpeedFpm: newDescentVs,
+        dmeArcEntrySpeedKts: newDescentIas,
       }));
     } else {
       const baseId = val.replace('base:', '');
       const found = baseAircraftList.find((b) => b.id === baseId);
       const newCruiseIas = found?.defaultCruiseIasKts || 110;
-      const newAltIas = found?.alternateSpeedKts || found?.defaultDescentIasKts || newCruiseIas;
+      const newDescentIas = found?.defaultDescentIasKts || Math.round(newCruiseIas * 0.9);
+      const newDescentVs = found?.defaultDescentVsFpm || 600;
+      const newAltIas = found?.alternateSpeedKts || newDescentIas;
       onUpdatePlan((prev) => ({
         ...prev,
         selectedAircraftSource: 'base',
         selectedBaseAircraftId: baseId,
         legs: prev.legs.map((l) => ({
           ...l,
-          iasKts:
-            l.iasKts === '' || l.iasKts === activeAircraft.defaultCruiseIasKts
-              ? newCruiseIas
-              : l.iasKts,
+          iasKts: newCruiseIas,
         })),
         alternateLeg: {
           ...prev.alternateLeg,
           iasKts: newAltIas,
         },
-        descentSpeedKts: '',
-        descentVerticalSpeedFpm: '',
-        alternateDescentSpeedKts: '',
-        alternateDescentVerticalSpeedFpm: '',
-        dmeArcEntrySpeedKts: '',
+        descentSpeedKts: newDescentIas,
+        descentVerticalSpeedFpm: newDescentVs,
+        alternateDescentSpeedKts: newAltIas,
+        alternateDescentVerticalSpeedFpm: newDescentVs,
+        dmeArcEntrySpeedKts: newDescentIas,
       }));
     }
   };
@@ -1923,12 +1927,36 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                 Ideal de Descida — TOD (Top of Descent)
               </h3>
-              {Number(effectiveDescentSpeedDestKts) > 0 &&
-                Number(effectiveDescentVsDestFpm) > 0 && (
-                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    {((Number(effectiveDescentSpeedDestKts) / 60) * (1000 / Number(effectiveDescentVsDestFpm))).toFixed(1)} NM / 1.000 ft
-                  </span>
+              <div className="flex items-center gap-1.5">
+                {(effectiveDescentVsDestFpm !== activeAircraft.defaultDescentVsFpm ||
+                  effectiveDescentVsAltFpm !== activeAircraft.defaultDescentVsFpm ||
+                  effectiveDescentSpeedDestKts !== activeAircraft.defaultDescentIasKts ||
+                  effectiveDescentSpeedAltKts !== activeAircraft.alternateSpeedKts) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdatePlan((p) => ({
+                        ...p,
+                        descentVerticalSpeedFpm: activeAircraft.defaultDescentVsFpm,
+                        alternateDescentVerticalSpeedFpm: activeAircraft.defaultDescentVsFpm,
+                        descentSpeedKts: activeAircraft.defaultDescentIasKts,
+                        alternateDescentSpeedKts: activeAircraft.alternateSpeedKts,
+                        dmeArcEntrySpeedKts: activeAircraft.defaultDescentIasKts,
+                      }))
+                    }
+                    title={`Restaurar valores do cadastro da aeronave (${activeAircraft.defaultDescentIasKts} kts / ${activeAircraft.defaultDescentVsFpm} fpm)`}
+                    className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-500/25"
+                  >
+                    Usar Padrão Aeronave ({activeAircraft.defaultDescentIasKts} kts / {activeAircraft.defaultDescentVsFpm} fpm)
+                  </button>
                 )}
+                {Number(effectiveDescentSpeedDestKts) > 0 &&
+                  Number(effectiveDescentVsDestFpm) > 0 && (
+                    <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {((Number(effectiveDescentSpeedDestKts) / 60) * (1000 / Number(effectiveDescentVsDestFpm))).toFixed(1)} NM / 1.000 ft
+                    </span>
+                  )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -1949,7 +1977,12 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         step={userPrefs.altitudeUnit === 'm' ? 50 : 100}
-                        value={fromFeet(effectiveDescentCruiseAltDestFt, userPrefs.altitudeUnit, 0)}
+                        value={
+                          plan.descentCruiseAltitudeFt !== ''
+                            ? fromFeet(plan.descentCruiseAltitudeFt, userPrefs.altitudeUnit, 0)
+                            : fromFeet(autoCruiseAltDestFt, userPrefs.altitudeUnit, 0)
+                        }
+                        placeholder={String(fromFeet(autoCruiseAltDestFt, userPrefs.altitudeUnit, 0) || '')}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1966,7 +1999,12 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         step={userPrefs.altitudeUnit === 'm' ? 50 : 100}
-                        value={fromFeet(effectiveDescentCruiseAltAltFt, userPrefs.altitudeUnit, 0)}
+                        value={
+                          plan.alternateDescentCruiseAltitudeFt !== ''
+                            ? fromFeet(plan.alternateDescentCruiseAltitudeFt, userPrefs.altitudeUnit, 0)
+                            : fromFeet(autoCruiseAltAltFt, userPrefs.altitudeUnit, 0)
+                        }
+                        placeholder={String(fromFeet(autoCruiseAltAltFt, userPrefs.altitudeUnit, 0) || '')}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1989,7 +2027,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         step={userPrefs.verticalSpeedUnit === 'm/s' ? '0.5' : 50}
-                        value={fromFpm(effectiveDescentVsDestFpm, userPrefs.verticalSpeedUnit, 1)}
+                        value={
+                          plan.descentVerticalSpeedFpm !== ''
+                            ? fromFpm(plan.descentVerticalSpeedFpm, userPrefs.verticalSpeedUnit, 1)
+                            : ''
+                        }
+                        placeholder={String(
+                          fromFpm(activeAircraft.defaultDescentVsFpm, userPrefs.verticalSpeedUnit, 1)
+                        )}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1999,6 +2044,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                             ),
                           }))
                         }
+                        onBlur={() => {
+                          if (plan.descentVerticalSpeedFpm === '') {
+                            onUpdatePlan((p) => ({
+                              ...p,
+                              descentVerticalSpeedFpm: activeAircraft.defaultDescentVsFpm,
+                            }));
+                          }
+                        }}
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs font-semibold"
                       />
                     </td>
@@ -2006,7 +2059,18 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         step={userPrefs.verticalSpeedUnit === 'm/s' ? '0.5' : 50}
-                        value={fromFpm(effectiveDescentVsAltFpm, userPrefs.verticalSpeedUnit, 1)}
+                        value={
+                          plan.alternateDescentVerticalSpeedFpm !== ''
+                            ? fromFpm(
+                                plan.alternateDescentVerticalSpeedFpm,
+                                userPrefs.verticalSpeedUnit,
+                                1
+                              )
+                            : ''
+                        }
+                        placeholder={String(
+                          fromFpm(activeAircraft.defaultDescentVsFpm, userPrefs.verticalSpeedUnit, 1)
+                        )}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -2016,6 +2080,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                             ),
                           }))
                         }
+                        onBlur={() => {
+                          if (plan.alternateDescentVerticalSpeedFpm === '') {
+                            onUpdatePlan((p) => ({
+                              ...p,
+                              alternateDescentVerticalSpeedFpm: activeAircraft.defaultDescentVsFpm,
+                            }));
+                          }
+                        }}
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs"
                       />
                     </td>
@@ -2050,7 +2122,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={fromKnots(effectiveDescentSpeedDestKts, userPrefs.speedUnit, 0)}
+                        value={
+                          plan.descentSpeedKts !== ''
+                            ? fromKnots(plan.descentSpeedKts, userPrefs.speedUnit, 0)
+                            : ''
+                        }
+                        placeholder={String(
+                          fromKnots(activeAircraft.defaultDescentIasKts, userPrefs.speedUnit, 0)
+                        )}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -2060,13 +2139,28 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                             ),
                           }))
                         }
+                        onBlur={() => {
+                          if (plan.descentSpeedKts === '') {
+                            onUpdatePlan((p) => ({
+                              ...p,
+                              descentSpeedKts: activeAircraft.defaultDescentIasKts,
+                            }));
+                          }
+                        }}
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs font-semibold"
                       />
                     </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={fromKnots(effectiveDescentSpeedAltKts, userPrefs.speedUnit, 0)}
+                        value={
+                          plan.alternateDescentSpeedKts !== ''
+                            ? fromKnots(plan.alternateDescentSpeedKts, userPrefs.speedUnit, 0)
+                            : ''
+                        }
+                        placeholder={String(
+                          fromKnots(activeAircraft.alternateSpeedKts, userPrefs.speedUnit, 0)
+                        )}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -2076,6 +2170,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                             ),
                           }))
                         }
+                        onBlur={() => {
+                          if (plan.alternateDescentSpeedKts === '') {
+                            onUpdatePlan((p) => ({
+                              ...p,
+                              alternateDescentSpeedKts: activeAircraft.alternateSpeedKts,
+                            }));
+                          }
+                        }}
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs"
                       />
                     </td>
@@ -2338,7 +2440,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={fromKnots(effectiveDmeArcSpeedKts, userPrefs.speedUnit, 0)}
+                  value={
+                    plan.dmeArcEntrySpeedKts !== ''
+                      ? fromKnots(plan.dmeArcEntrySpeedKts, userPrefs.speedUnit, 0)
+                      : ''
+                  }
+                  placeholder={String(
+                    fromKnots(activeAircraft.defaultDescentIasKts, userPrefs.speedUnit, 0)
+                  )}
                   onChange={(e) =>
                     onUpdatePlan((p) => ({
                       ...p,
@@ -2348,7 +2457,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       ),
                     }))
                   }
-                  placeholder="Ex: 140"
+                  onBlur={() => {
+                    if (plan.dmeArcEntrySpeedKts === '') {
+                      onUpdatePlan((p) => ({
+                        ...p,
+                        dmeArcEntrySpeedKts: activeAircraft.defaultDescentIasKts,
+                      }));
+                    }
+                  }}
                   className="w-24 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1 text-center font-mono text-xs font-semibold"
                 />
               </div>

@@ -105,7 +105,7 @@ export function toKnots(val: number | '', unit: SpeedUnitPref): number | '' {
 export function speedUnitLabel(unit: SpeedUnitPref): string {
   if (unit === 'km/h' || unit === 'kmh') return 'km/h';
   if (unit === 'mph') return 'mph';
-  return 'kt';
+  return 'kts';
 }
 
 // --- Altitude & Elevation (internal: feet ft) ---

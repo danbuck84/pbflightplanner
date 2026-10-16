@@ -132,11 +132,35 @@ export const App: React.FC = () => {
   const [adminPass, setAdminPass] = useState('');
   const [adminError, setAdminError] = useState('');
 
+  // --- Helper to merge stored aircraft catalog with DEFAULT_BASE_AIRCRAFT ---
+  const mergeBaseAircraftCatalog = (stored: BaseAircraft[]): BaseAircraft[] => {
+    const storedMap = new Map<string, BaseAircraft>();
+    for (const item of stored) {
+      if (item && item.id) {
+        storedMap.set(item.id, item);
+      }
+    }
+    const mergedDefaults = DEFAULT_BASE_AIRCRAFT.map((def) => {
+      const existing = storedMap.get(def.id);
+      if (!existing) return def;
+      storedMap.delete(def.id);
+      return {
+        ...def,
+        ...existing,
+        defaultCruiseIasKts: existing.defaultCruiseIasKts || def.defaultCruiseIasKts,
+        defaultDescentIasKts: existing.defaultDescentIasKts || def.defaultDescentIasKts,
+        defaultDescentVsFpm: existing.defaultDescentVsFpm || def.defaultDescentVsFpm,
+        alternateSpeedKts: existing.alternateSpeedKts || def.alternateSpeedKts,
+      };
+    });
+    return [...mergedDefaults, ...Array.from(storedMap.values())];
+  };
+
   // --- Data State ---
   const [baseAircraftList, setBaseAircraftList] = useState<BaseAircraft[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.BASE_AIRCRAFT);
-      return saved ? JSON.parse(saved) : DEFAULT_BASE_AIRCRAFT;
+      return saved ? mergeBaseAircraftCatalog(JSON.parse(saved)) : DEFAULT_BASE_AIRCRAFT;
     } catch {
       return DEFAULT_BASE_AIRCRAFT;
     }
@@ -162,19 +186,92 @@ export const App: React.FC = () => {
 
   const [globalExtraAerodromes, setGlobalExtraAerodromes] = useState<Aerodrome[]>([]);
 
-  const sanitizeFlightPlan = (p: FlightPlan): FlightPlan => ({
-    ...p,
-    callsign: p.callsign === 'GLD1537' ? '' : p.callsign,
-    operatorRemark:
-      p.operatorRemark && p.operatorRemark.toUpperCase().includes('GOLD')
-        ? 'PARTICULAR'
-        : p.operatorRemark,
-  });
+  const resolvePlanAircraftPerf = (
+    p: FlightPlan,
+    baseList: BaseAircraft[],
+    fleetList: UserAircraftPrefix[]
+  ) => {
+    if (p.selectedAircraftSource === 'prefix' && p.selectedPrefixId) {
+      const pref = fleetList.find((f) => f.id === p.selectedPrefixId);
+      if (pref) {
+        const baseFallback =
+          baseList.find((b) => b.id === pref.baseAircraftId) ||
+          DEFAULT_BASE_AIRCRAFT.find((b) => b.id === pref.baseAircraftId);
+        const cruiseIas = pref.defaultCruiseIasKts || baseFallback?.defaultCruiseIasKts || 110;
+        const descentIas =
+          pref.defaultDescentIasKts ||
+          baseFallback?.defaultDescentIasKts ||
+          Math.round(cruiseIas * 0.9);
+        const descentVs = pref.defaultDescentVsFpm || baseFallback?.defaultDescentVsFpm || 600;
+        const altIas = pref.alternateSpeedKts || baseFallback?.alternateSpeedKts || descentIas;
+        return { cruiseIas, descentIas, descentVs, altIas };
+      }
+    }
+    const base =
+      baseList.find((b) => b.id === p.selectedBaseAircraftId) ||
+      DEFAULT_BASE_AIRCRAFT.find((b) => b.id === p.selectedBaseAircraftId) ||
+      DEFAULT_BASE_AIRCRAFT[0];
+    const cruiseIas = base.defaultCruiseIasKts || 110;
+    const descentIas = base.defaultDescentIasKts || Math.round(cruiseIas * 0.9);
+    const descentVs = base.defaultDescentVsFpm || 600;
+    const altIas = base.alternateSpeedKts || descentIas;
+    return { cruiseIas, descentIas, descentVs, altIas };
+  };
+
+  const sanitizeFlightPlan = (
+    p: FlightPlan,
+    baseList: BaseAircraft[] = DEFAULT_BASE_AIRCRAFT,
+    fleetList: UserAircraftPrefix[] = []
+  ): FlightPlan => {
+    const perf = resolvePlanAircraftPerf(p, baseList, fleetList);
+    const hasLegacySpreadsheetTod =
+      (p.descentVerticalSpeedFpm === 1900 && p.descentSpeedKts === 280) ||
+      p.alternateDescentSpeedKts === 350;
+
+    return {
+      ...p,
+      callsign: p.callsign === 'GLD1537' ? '' : p.callsign,
+      operatorRemark:
+        p.operatorRemark && p.operatorRemark.toUpperCase().includes('GOLD')
+          ? 'PARTICULAR'
+          : p.operatorRemark,
+      descentCruiseAltitudeFt:
+        hasLegacySpreadsheetTod && p.descentCruiseAltitudeFt === 5500
+          ? ''
+          : p.descentCruiseAltitudeFt,
+      alternateDescentCruiseAltitudeFt:
+        hasLegacySpreadsheetTod && p.alternateDescentCruiseAltitudeFt === 1500
+          ? ''
+          : p.alternateDescentCruiseAltitudeFt,
+      descentVerticalSpeedFpm:
+        hasLegacySpreadsheetTod || p.descentVerticalSpeedFpm === ''
+          ? perf.descentVs
+          : p.descentVerticalSpeedFpm,
+      alternateDescentVerticalSpeedFpm:
+        hasLegacySpreadsheetTod || p.alternateDescentVerticalSpeedFpm === ''
+          ? perf.descentVs
+          : p.alternateDescentVerticalSpeedFpm,
+      descentSpeedKts:
+        hasLegacySpreadsheetTod || p.descentSpeedKts === ''
+          ? perf.descentIas
+          : p.descentSpeedKts,
+      alternateDescentSpeedKts:
+        hasLegacySpreadsheetTod || p.alternateDescentSpeedKts === ''
+          ? perf.altIas
+          : p.alternateDescentSpeedKts,
+      dmeArcEntrySpeedKts:
+        hasLegacySpreadsheetTod || p.dmeArcEntrySpeedKts === '' || p.dmeArcEntrySpeedKts === 210
+          ? perf.descentIas
+          : p.dmeArcEntrySpeedKts,
+    };
+  };
 
   const [plan, setPlan] = useState<FlightPlan>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.CURRENT_PLAN);
-      return saved ? sanitizeFlightPlan(JSON.parse(saved)) : DEFAULT_SAMPLE_FLIGHT_PLAN;
+      return saved
+        ? sanitizeFlightPlan(JSON.parse(saved), baseAircraftList, userFleet)
+        : DEFAULT_SAMPLE_FLIGHT_PLAN;
     } catch {
       return DEFAULT_SAMPLE_FLIGHT_PLAN;
     }
@@ -184,7 +281,7 @@ export const App: React.FC = () => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.SAVED_PLANS);
       const parsed: FlightPlan[] = saved ? JSON.parse(saved) : [DEFAULT_SAMPLE_FLIGHT_PLAN];
-      return parsed.map(sanitizeFlightPlan);
+      return parsed.map((item) => sanitizeFlightPlan(item, baseAircraftList, userFleet));
     } catch {
       return [DEFAULT_SAMPLE_FLIGHT_PLAN];
     }
@@ -202,8 +299,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     fetchGlobalAircraftCatalog().then((catalog) => {
       if (catalog && catalog.length > 0) {
-        setBaseAircraftList(catalog);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.BASE_AIRCRAFT, JSON.stringify(catalog));
+        const merged = mergeBaseAircraftCatalog(catalog);
+        setBaseAircraftList(merged);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.BASE_AIRCRAFT, JSON.stringify(merged));
       }
     });
     fetchGlobalCustomAerodromes().then((list) => {
@@ -223,21 +321,26 @@ export const App: React.FC = () => {
             fetchUserFleet(user.uid),
             fetchUserAerodromes(user.uid),
           ]);
-          if (cloudPlans.length > 0) {
-            const sanitizedPlans = cloudPlans.map(sanitizeFlightPlan);
-            setSavedPlans(sanitizedPlans);
-            localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(sanitizedPlans));
-          }
+          const sanitizedFleet =
+            cloudFleet.length > 0
+              ? cloudFleet.map((f) => ({
+                  ...f,
+                  operatorName:
+                    !f.operatorName || f.operatorName.toUpperCase().includes('GOLD')
+                      ? 'PARTICULAR'
+                      : f.operatorName,
+                }))
+              : userFleet;
           if (cloudFleet.length > 0) {
-            const sanitizedFleet = cloudFleet.map((f) => ({
-              ...f,
-              operatorName:
-                !f.operatorName || f.operatorName.toUpperCase().includes('GOLD')
-                  ? 'PARTICULAR'
-                  : f.operatorName,
-            }));
             setUserFleet(sanitizedFleet);
             localStorage.setItem(LOCAL_STORAGE_KEYS.USER_FLEET, JSON.stringify(sanitizedFleet));
+          }
+          if (cloudPlans.length > 0) {
+            const sanitizedPlans = cloudPlans.map((cp) =>
+              sanitizeFlightPlan(cp, baseAircraftList, sanitizedFleet)
+            );
+            setSavedPlans(sanitizedPlans);
+            localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(sanitizedPlans));
           }
           if (cloudAeros.length > 0) {
             setCustomAerodromes(cloudAeros);
@@ -663,6 +766,22 @@ export const App: React.FC = () => {
     const next = [prefix, ...userFleet.filter((p) => p.id !== prefix.id)];
     setUserFleet(next);
     localStorage.setItem(LOCAL_STORAGE_KEYS.USER_FLEET, JSON.stringify(next));
+    if (plan.selectedAircraftSource === 'prefix' && plan.selectedPrefixId === prefix.id) {
+      setPlan((prev) => ({
+        ...prev,
+        operatorRemark: prefix.operatorName || prev.operatorRemark,
+        legs: prev.legs.map((l) => ({ ...l, iasKts: prefix.defaultCruiseIasKts })),
+        alternateLeg: {
+          ...prev.alternateLeg,
+          iasKts: prefix.alternateSpeedKts || prefix.defaultDescentIasKts,
+        },
+        descentSpeedKts: prefix.defaultDescentIasKts,
+        descentVerticalSpeedFpm: prefix.defaultDescentVsFpm,
+        alternateDescentSpeedKts: prefix.alternateSpeedKts || prefix.defaultDescentIasKts,
+        alternateDescentVerticalSpeedFpm: prefix.defaultDescentVsFpm,
+        dmeArcEntrySpeedKts: prefix.defaultDescentIasKts,
+      }));
+    }
     if (currentUser) {
       try {
         await saveUserPrefix(currentUser.uid, prefix);
@@ -693,6 +812,21 @@ export const App: React.FC = () => {
     ];
     setBaseAircraftList(next);
     localStorage.setItem(LOCAL_STORAGE_KEYS.BASE_AIRCRAFT, JSON.stringify(next));
+    if (plan.selectedAircraftSource === 'base' && plan.selectedBaseAircraftId === aircraft.id) {
+      setPlan((prev) => ({
+        ...prev,
+        legs: prev.legs.map((l) => ({ ...l, iasKts: aircraft.defaultCruiseIasKts })),
+        alternateLeg: {
+          ...prev.alternateLeg,
+          iasKts: aircraft.alternateSpeedKts || aircraft.defaultDescentIasKts,
+        },
+        descentSpeedKts: aircraft.defaultDescentIasKts,
+        descentVerticalSpeedFpm: aircraft.defaultDescentVsFpm,
+        alternateDescentSpeedKts: aircraft.alternateSpeedKts || aircraft.defaultDescentIasKts,
+        alternateDescentVerticalSpeedFpm: aircraft.defaultDescentVsFpm,
+        dmeArcEntrySpeedKts: aircraft.defaultDescentIasKts,
+      }));
+    }
     try {
       await saveGlobalBaseAircraft(aircraft);
     } catch (err) {
@@ -1059,13 +1193,32 @@ export const App: React.FC = () => {
             onSaveUserPrefix={handleSaveUserPrefix}
             onDeleteUserPrefix={handleDeleteUserPrefix}
             onSelectAircraftForPlan={(source, id) => {
-              setPlan((prev) => ({
-                ...prev,
-                selectedAircraftSource: source,
-                ...(source === 'prefix'
-                  ? { selectedPrefixId: id }
-                  : { selectedBaseAircraftId: id }),
-              }));
+              setPlan((prev) => {
+                const nextSelection: FlightPlan = {
+                  ...prev,
+                  selectedAircraftSource: source,
+                  ...(source === 'prefix'
+                    ? { selectedPrefixId: id }
+                    : { selectedBaseAircraftId: id }),
+                };
+                const perf = resolvePlanAircraftPerf(nextSelection, baseAircraftList, userFleet);
+                const foundPrefix =
+                  source === 'prefix' ? userFleet.find((p) => p.id === id) : undefined;
+                return {
+                  ...nextSelection,
+                  operatorRemark: foundPrefix?.operatorName || prev.operatorRemark,
+                  legs: prev.legs.map((l) => ({ ...l, iasKts: perf.cruiseIas })),
+                  alternateLeg: {
+                    ...prev.alternateLeg,
+                    iasKts: perf.altIas,
+                  },
+                  descentSpeedKts: perf.descentIas,
+                  descentVerticalSpeedFpm: perf.descentVs,
+                  alternateDescentSpeedKts: perf.altIas,
+                  alternateDescentVerticalSpeedFpm: perf.descentVs,
+                  dmeArcEntrySpeedKts: perf.descentIas,
+                };
+              });
               setActiveTab('planner');
             }}
             onSaveBaseAircraft={handleSaveBaseAircraft}
@@ -1332,7 +1485,7 @@ export const App: React.FC = () => {
                     🇧🇷 Padrão Brasil / ICAO
                   </div>
                   <div className="mt-0.5 font-mono text-[10px] text-slate-500">
-                    kg • Litros • kt • ft • NM • hPa
+                    kg • Litros • kts • ft • NM • hPa
                   </div>
                 </button>
 
@@ -1356,7 +1509,7 @@ export const App: React.FC = () => {
                     🇺🇸 Padrão EUA / FAA
                   </div>
                   <div className="mt-0.5 font-mono text-[10px] text-slate-500">
-                    lbs • Galões • kt • ft • NM • inHg
+                    lbs • Galões • kts • ft • NM • inHg
                   </div>
                 </button>
 
@@ -1451,7 +1604,7 @@ export const App: React.FC = () => {
                   }
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 font-semibold"
                 >
-                  <option value="kt">Nós / Knots (kt)</option>
+                  <option value="kt">Nós / Knots (kts)</option>
                   <option value="km/h">Quilômetros por Hora (km/h)</option>
                   <option value="mph">Milhas por Hora (mph)</option>
                 </select>

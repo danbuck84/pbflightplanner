@@ -108,7 +108,7 @@ export const ReferenceSummaryTab: React.FC = () => {
                   <th className="py-2 px-2">Até (ft)</th>
                   <th className="py-2 px-2">Metros</th>
                   <th className="py-2 px-2">Temp. ISA</th>
-                  <th className="py-2 px-2">Vel. Som (KT)</th>
+                  <th className="py-2 px-2">Vel. Som (kts)</th>
                   <th className="py-2 px-2">Vel. Som (km/h)</th>
                 </tr>
               </thead>
@@ -120,7 +120,7 @@ export const ReferenceSummaryTab: React.FC = () => {
                     <td className="py-1.5 px-2">{row.meters}</td>
                     <td className="py-1.5 px-2">{row.tempC}</td>
                     <td className="py-1.5 px-2 font-bold text-amber-600 dark:text-amber-400">
-                      {row.soundKt} kt
+                      {row.soundKt} kts
                     </td>
                     <td className="py-1.5 px-2">{row.soundKmh} km/h</td>
                   </tr>
