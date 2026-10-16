@@ -29,6 +29,7 @@ import type {
   PropulsionType,
   RouteLeg,
   UserAircraftPrefix,
+  UserPreferences,
 } from '../types/aviation';
 import { AerodromeAutocomplete } from './AerodromeAutocomplete';
 import {
@@ -44,11 +45,30 @@ import {
   fetchLiveMetarAndTaf,
   parseMetarString,
 } from '../utils/aviationMath';
+import {
+  distanceUnitLabel,
+  formatFuelCapacity,
+  formatFuelFlow,
+  formatWeight,
+  fromFeet,
+  fromFpm,
+  fromKg,
+  fromKnots,
+  fromNm,
+  speedUnitLabel,
+  toFeet,
+  toFpm,
+  toKg,
+  toKnots,
+  toNm,
+  vsUnitLabel,
+} from '../utils/unitConversions';
 
 interface FlightPlannerTabProps {
   plan: FlightPlan;
   onUpdatePlan: (updater: (prev: FlightPlan) => FlightPlan) => void;
   onResetPlan: () => void;
+  userPrefs: UserPreferences;
   aerodromes: Aerodrome[];
   baseAircraftList: BaseAircraft[];
   userFleet: UserAircraftPrefix[];
@@ -94,6 +114,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
   plan,
   onUpdatePlan,
   onResetPlan,
+  userPrefs,
   aerodromes,
   baseAircraftList,
   userFleet,
@@ -795,7 +816,17 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                         {aero.name}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {aero.city} • Elev: <span className="font-mono font-semibold">{Math.round(aero.elevationFeet)} ft</span> ({aero.elevationMeters} m) • RWY <span className="font-mono font-semibold">{aero.runway1}/{aero.runway2}</span>
+                        {aero.city} • Elev:{' '}
+                        {userPrefs.altitudeUnit === 'm' ? (
+                          <>
+                            <span className="font-mono font-semibold">{aero.elevationMeters} m</span> ({Math.round(aero.elevationFeet)} ft)
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-mono font-semibold">{Math.round(aero.elevationFeet)} ft</span> ({aero.elevationMeters} m)
+                          </>
+                        )}{' '}
+                        • RWY <span className="font-mono font-semibold">{aero.runway1}/{aero.runway2}</span>
                       </div>
                     </div>
                   ) : (
@@ -900,26 +931,26 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400">Consumo Litro/Hora</div>
+                <div className="text-[10px] text-slate-400">
+                  Consumo ({userPrefs.fuelVolumeUnit === 'gal' ? 'Gal/Hora' : 'Litro/Hora'})
+                </div>
                 <div className="mt-0.5 font-mono font-bold">
-                  {activeAircraft.fuelConsumptionLph > 0
-                    ? `${activeAircraft.fuelConsumptionLph} L/h`
-                    : 'N/A'}
+                  {formatFuelFlow(activeAircraft.fuelConsumptionLph, userPrefs.fuelVolumeUnit)}
                 </div>
               </div>
               <div className="col-span-2 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
-                <div className="text-[10px] text-slate-400">Capacidade de Combustível (litros)</div>
+                <div className="text-[10px] text-slate-400">
+                  Capacidade de Combustível ({userPrefs.fuelVolumeUnit === 'gal' ? 'galões' : 'litros'})
+                </div>
                 <div className="mt-0.5 font-mono font-semibold">
-                  {/^[\d.,\s]+$/.test(activeAircraft.fuelCapacityDisplay.trim())
-                    ? `${activeAircraft.fuelCapacityDisplay.trim()} litros`
-                    : activeAircraft.fuelCapacityDisplay}
+                  {formatFuelCapacity(activeAircraft.fuelCapacityDisplay, userPrefs.fuelVolumeUnit)}
                 </div>
               </div>
             </div>
 
             <div>
               <label className="block font-semibold text-slate-600 dark:text-slate-300">
-                Unidade de Combustível
+                Unidade de Combustível (Cálculo Rota)
               </label>
               <select
                 value={plan.fuelUnit}
@@ -945,7 +976,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
             </span>
             <Scale className="h-4 w-4 text-emerald-500" />
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              Informações de Peso
+              Informações de Peso ({userPrefs.weightUnit})
             </h3>
           </div>
 
@@ -967,14 +998,17 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               </div>
               <div>
                 <label className="block font-medium text-slate-600 dark:text-slate-300">
-                  Peso Médio (kg)
+                  Peso Médio ({userPrefs.weightUnit})
                 </label>
                 <input
                   type="number"
                   min={0}
-                  value={plan.AverageCrewWeightKg}
+                  value={fromKg(plan.AverageCrewWeightKg, userPrefs.weightUnit, 0)}
                   onChange={(e) =>
-                    onUpdatePlan((p) => ({ ...p, AverageCrewWeightKg: Number(e.target.value) }))
+                    onUpdatePlan((p) => ({
+                      ...p,
+                      AverageCrewWeightKg: Number(toKg(e.target.value === '' ? 0 : Number(e.target.value), userPrefs.weightUnit)) || 0,
+                    }))
                   }
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 font-mono text-xs font-semibold"
                 />
@@ -983,14 +1017,17 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
 
             <div>
               <label className="block font-medium text-slate-600 dark:text-slate-300">
-                Carga / Bagagem (kg)
+                Carga / Bagagem ({userPrefs.weightUnit})
               </label>
               <input
                 type="number"
                 min={0}
-                value={plan.cargoWeightKg}
+                value={fromKg(plan.cargoWeightKg, userPrefs.weightUnit, 0)}
                 onChange={(e) =>
-                  onUpdatePlan((p) => ({ ...p, cargoWeightKg: Number(e.target.value) }))
+                  onUpdatePlan((p) => ({
+                    ...p,
+                    cargoWeightKg: Number(toKg(e.target.value === '' ? 0 : Number(e.target.value), userPrefs.weightUnit)) || 0,
+                  }))
                 }
                 className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 font-mono text-xs font-semibold"
               />
@@ -1000,13 +1037,13 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               <div>
                 <div className="text-[10px] text-slate-400">Peso Vazio (BEW)</div>
                 <div className="mt-0.5 font-mono font-semibold">
-                  {activeAircraft.emptyWeightKg.toLocaleString('pt-BR')} kg
+                  {formatWeight(activeAircraft.emptyWeightKg, userPrefs.weightUnit, 0)}
                 </div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-400">GW (Peso Bruto Est.)</div>
                 <div className="mt-0.5 font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                  {grossWeightKg !== null ? `${grossWeightKg.toFixed(1)} kg` : '—'}
+                  {grossWeightKg !== null ? formatWeight(grossWeightKg, userPrefs.weightUnit, 1) : '—'}
                 </div>
               </div>
             </div>
@@ -1233,18 +1270,18 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <th className="py-2.5 px-2 text-left">De (Origem / Fixo)</th>
                 <th className="py-2.5 px-2 text-left">Para (Fixo / Portão / Destino)</th>
-                <th className="py-2.5 px-1.5 text-center">Dist. (NM)</th>
+                <th className="py-2.5 px-1.5 text-center">Dist. ({distanceUnitLabel(userPrefs.distanceUnit)})</th>
                 <th className="py-2.5 px-1.5 text-center">Rumo Mag.</th>
-                <th className="py-2.5 px-1.5 text-center">VI / IAS (kt)</th>
+                <th className="py-2.5 px-1.5 text-center">VI / IAS ({speedUnitLabel(userPrefs.speedUnit)})</th>
                 <th className="py-2.5 px-1.5 text-center">Mach</th>
                 <th className="py-2.5 px-1.5 text-center">Regra PI</th>
                 <th className="py-2.5 px-1.5 text-center">Altitude / FL</th>
                 <th className="py-2.5 px-1 text-center">REA/H</th>
-                <th className="py-2.5 px-1.5 text-center">VA / TAS</th>
+                <th className="py-2.5 px-1.5 text-center">VA / TAS ({speedUnitLabel(userPrefs.speedUnit)})</th>
                 <th className="py-2.5 px-1.5 text-center">Vento Dir (°)</th>
-                <th className="py-2.5 px-1.5 text-center">Vento (kt)</th>
+                <th className="py-2.5 px-1.5 text-center">Vento ({speedUnitLabel(userPrefs.speedUnit)})</th>
                 <th className="py-2.5 px-1.5 text-center">Proa Mag.</th>
-                <th className="py-2.5 px-1.5 text-center">VS / GS</th>
+                <th className="py-2.5 px-1.5 text-center">VS / GS ({speedUnitLabel(userPrefs.speedUnit)})</th>
                 <th className="py-2.5 px-1.5 text-center">Duração</th>
                 <th className="py-2.5 px-1.5 text-center">ETO / ETA</th>
                 <th className="py-2.5 px-1.5 text-center">Combustível</th>
@@ -1310,10 +1347,10 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                         type="number"
                         step="0.1"
                         min={0}
-                        value={leg.distanceNm}
+                        value={fromNm(leg.distanceNm, userPrefs.distanceUnit, 1)}
                         onChange={(e) =>
                           updateLeg(index, {
-                            distanceNm: e.target.value === '' ? '' : Number(e.target.value),
+                            distanceNm: toNm(e.target.value === '' ? '' : Number(e.target.value), userPrefs.distanceUnit),
                           })
                         }
                         className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-center font-mono text-xs font-semibold"
@@ -1337,10 +1374,10 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         min={0}
-                        value={leg.iasKts}
+                        value={fromKnots(leg.iasKts, userPrefs.speedUnit, 0)}
                         onChange={(e) =>
                           updateLeg(index, {
-                            iasKts: e.target.value === '' ? '' : Number(e.target.value),
+                            iasKts: toKnots(e.target.value === '' ? '' : Number(e.target.value), userPrefs.speedUnit),
                           })
                         }
                         className="w-14 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-center font-mono text-xs font-semibold"
@@ -1388,7 +1425,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       />
                     </td>
                     <td className="py-1.5 px-1.5 text-center font-mono font-semibold text-slate-700 dark:text-slate-300">
-                      {leg.tasKts !== null ? Math.round(leg.tasKts) : '—'}
+                      {leg.tasKts !== null ? fromKnots(leg.tasKts, userPrefs.speedUnit, 0) : '—'}
                     </td>
                     <td className="py-1.5 px-1.5 text-center">
                       <input
@@ -1409,10 +1446,10 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                         <input
                           type="number"
                           min={0}
-                          value={leg.windSpeedKts}
+                          value={fromKnots(leg.windSpeedKts, userPrefs.speedUnit, 0)}
                           onChange={(e) =>
                             updateLeg(index, {
-                              windSpeedKts: e.target.value === '' ? '' : Number(e.target.value),
+                              windSpeedKts: toKnots(e.target.value === '' ? '' : Number(e.target.value), userPrefs.speedUnit),
                             })
                           }
                           className="w-12 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-1 py-1 text-center font-mono text-xs"
@@ -1433,7 +1470,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       {leg.magneticHeading !== null ? `${Math.round(leg.magneticHeading)}°` : '—'}
                     </td>
                     <td className="py-1.5 px-1.5 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      {leg.groundSpeedKts !== null ? Math.round(leg.groundSpeedKts) : '—'}
+                      {leg.groundSpeedKts !== null ? fromKnots(leg.groundSpeedKts, userPrefs.speedUnit, 0) : '—'}
                     </td>
                     <td className="py-1.5 px-1.5 text-center font-mono text-[11px]">
                       {leg.durationFormatted}
@@ -1523,13 +1560,13 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     type="number"
                     step="0.1"
                     min={0}
-                    value={plan.alternateLeg.distanceNm}
+                    value={fromNm(plan.alternateLeg.distanceNm, userPrefs.distanceUnit, 1)}
                     onChange={(e) =>
                       onUpdatePlan((p) => ({
                         ...p,
                         alternateLeg: {
                           ...p.alternateLeg,
-                          distanceNm: e.target.value === '' ? '' : Number(e.target.value),
+                          distanceNm: toNm(e.target.value === '' ? '' : Number(e.target.value), userPrefs.distanceUnit),
                         },
                       }))
                     }
@@ -1558,13 +1595,13 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   <input
                     type="number"
                     min={0}
-                    value={plan.alternateLeg.iasKts}
+                    value={fromKnots(plan.alternateLeg.iasKts, userPrefs.speedUnit, 0)}
                     onChange={(e) =>
                       onUpdatePlan((p) => ({
                         ...p,
                         alternateLeg: {
                           ...p.alternateLeg,
-                          iasKts: e.target.value === '' ? '' : Number(e.target.value),
+                          iasKts: toKnots(e.target.value === '' ? '' : Number(e.target.value), userPrefs.speedUnit),
                         },
                       }))
                     }
@@ -1608,7 +1645,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   />
                 </td>
                 <td className="py-2 px-1.5 text-center font-mono">
-                  {computedLegBC.tasKts !== null ? Math.round(computedLegBC.tasKts) : '—'}
+                  {computedLegBC.tasKts !== null ? fromKnots(computedLegBC.tasKts, userPrefs.speedUnit, 0) : '—'}
                 </td>
                 <td className="py-2 px-1.5 text-center">
                   <input
@@ -1629,13 +1666,13 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 <td className="py-2 px-1.5 text-center">
                   <input
                     type="number"
-                    value={plan.alternateLeg.windSpeedKts}
+                    value={fromKnots(plan.alternateLeg.windSpeedKts, userPrefs.speedUnit, 0)}
                     onChange={(e) =>
                       onUpdatePlan((p) => ({
                         ...p,
                         alternateLeg: {
                           ...p.alternateLeg,
-                          windSpeedKts: e.target.value === '' ? '' : Number(e.target.value),
+                          windSpeedKts: toKnots(e.target.value === '' ? '' : Number(e.target.value), userPrefs.speedUnit),
                         },
                       }))
                     }
@@ -1649,7 +1686,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </td>
                 <td className="py-2 px-1.5 text-center font-mono font-bold">
                   {computedLegBC.groundSpeedKts !== null
-                    ? Math.round(computedLegBC.groundSpeedKts)
+                    ? fromKnots(computedLegBC.groundSpeedKts, userPrefs.speedUnit, 0)
                     : '—'}
                 </td>
                 <td className="py-2 px-1.5 text-center font-mono text-[11px]">
@@ -1679,7 +1716,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 Origem → Destino (A+B)
               </div>
               <div className="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
-                {totals.distanceAB.toFixed(1)} NM
+                {Number(fromNm(totals.distanceAB, userPrefs.distanceUnit, 1)).toFixed(1)} {distanceUnitLabel(userPrefs.distanceUnit)}
               </div>
               <div className="mt-0.5 font-mono text-xs text-sky-600 dark:text-sky-400">
                 ⏱ {totals.durationFormattedAB} • ⛽ {totals.fuelAB.toFixed(1)}
@@ -1691,7 +1728,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 Destino → Altern. (B+C)
               </div>
               <div className="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
-                {totals.distanceBC.toFixed(1)} NM
+                {Number(fromNm(totals.distanceBC, userPrefs.distanceUnit, 1)).toFixed(1)} {distanceUnitLabel(userPrefs.distanceUnit)}
               </div>
               <div className="mt-0.5 font-mono text-xs text-amber-600 dark:text-amber-400">
                 ⏱ {totals.durationFormattedBC} • ⛽ {totals.fuelBC.toFixed(1)}
@@ -1703,7 +1740,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 Total Origem → Alt. (A+B+C)
               </div>
               <div className="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
-                {totals.distanceABC.toFixed(1)} NM
+                {Number(fromNm(totals.distanceABC, userPrefs.distanceUnit, 1)).toFixed(1)} {distanceUnitLabel(userPrefs.distanceUnit)}
               </div>
               <div className="mt-0.5 font-mono text-xs text-slate-600 dark:text-slate-300">
                 ⏱ {totals.durationFormattedABC} • ⛽ {totals.fuelABC.toFixed(1)}
@@ -1836,30 +1873,41 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Elevação: {aero ? `${Math.round(aero.elevationFeet)} ft` : '—'}</span>
+                    <span>
+                      Elevação:{' '}
+                      {aero
+                        ? userPrefs.altitudeUnit === 'm'
+                          ? `${aero.elevationMeters} m`
+                          : `${Math.round(aero.elevationFeet)} ft`
+                        : '—'}
+                    </span>
                     <div className="flex items-center gap-1.5">
-                      <span>CT (ft):</span>
+                      <span>CT ({userPrefs.altitudeUnit}):</span>
                       {ct.typeLabel === 'VAC' ? (
                         <input
                           type="number"
-                          step={100}
-                          value={plan[key].vacTrafficPatternAltitudeFt}
+                          step={userPrefs.altitudeUnit === 'm' ? 50 : 100}
+                          value={fromFeet(plan[key].vacTrafficPatternAltitudeFt, userPrefs.altitudeUnit, 0)}
                           onChange={(e) =>
                             onUpdatePlan((p) => ({
                               ...p,
                               [key]: {
                                 ...p[key],
-                                vacTrafficPatternAltitudeFt:
+                                vacTrafficPatternAltitudeFt: toFeet(
                                   e.target.value === '' ? '' : Number(e.target.value),
+                                  userPrefs.altitudeUnit
+                                ),
                               },
                             }))
                           }
-                          placeholder={String(ct.standardFt || 3000)}
+                          placeholder={String(fromFeet(ct.standardFt || 3000, userPrefs.altitudeUnit, 0))}
                           className="w-20 rounded border border-sky-500/50 bg-sky-500/10 px-1.5 py-0.5 text-center font-mono text-xs font-bold text-sky-600 dark:text-sky-300"
                         />
                       ) : (
                         <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
-                          {ct.effectiveFt !== null ? `${ct.effectiveFt} ft` : 'N/A'}
+                          {ct.effectiveFt !== null
+                            ? `${fromFeet(ct.effectiveFt, userPrefs.altitudeUnit, 0)} ${userPrefs.altitudeUnit}`
+                            : 'N/A'}
                         </span>
                       )}
                     </div>
@@ -1894,19 +1942,21 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800">
                   <tr>
                     <td className="py-2 font-medium">
-                      <div>Altitude Cruzeiro (ft):</div>
+                      <div>Altitude Cruzeiro ({userPrefs.altitudeUnit}):</div>
                       <div className="text-[10px] font-normal text-slate-400">Auto da Rota</div>
                     </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={100}
-                        value={effectiveDescentCruiseAltDestFt}
+                        step={userPrefs.altitudeUnit === 'm' ? 50 : 100}
+                        value={fromFeet(effectiveDescentCruiseAltDestFt, userPrefs.altitudeUnit, 0)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            descentCruiseAltitudeFt:
+                            descentCruiseAltitudeFt: toFeet(
                               e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.altitudeUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs font-semibold"
@@ -1915,13 +1965,15 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={100}
-                        value={effectiveDescentCruiseAltAltFt}
+                        step={userPrefs.altitudeUnit === 'm' ? 50 : 100}
+                        value={fromFeet(effectiveDescentCruiseAltAltFt, userPrefs.altitudeUnit, 0)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            alternateDescentCruiseAltitudeFt:
+                            alternateDescentCruiseAltitudeFt: toFeet(
                               e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.altitudeUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs"
@@ -1930,19 +1982,21 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">
-                      <div>Vertical Speed (fpm):</div>
+                      <div>Vertical Speed ({vsUnitLabel(userPrefs.verticalSpeedUnit)}):</div>
                       <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
                     </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={50}
-                        value={effectiveDescentVsDestFpm}
+                        step={userPrefs.verticalSpeedUnit === 'm/s' ? '0.5' : 50}
+                        value={fromFpm(effectiveDescentVsDestFpm, userPrefs.verticalSpeedUnit, 1)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            descentVerticalSpeedFpm:
+                            descentVerticalSpeedFpm: toFpm(
                               e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.verticalSpeedUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs font-semibold"
@@ -1951,13 +2005,15 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={50}
-                        value={effectiveDescentVsAltFpm}
+                        step={userPrefs.verticalSpeedUnit === 'm/s' ? '0.5' : 50}
+                        value={fromFpm(effectiveDescentVsAltFpm, userPrefs.verticalSpeedUnit, 1)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            alternateDescentVerticalSpeedFpm:
+                            alternateDescentVerticalSpeedFpm: toFpm(
                               e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.verticalSpeedUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs"
@@ -1965,12 +2021,16 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-2 font-medium">Descida até o CT (ft):</td>
+                    <td className="py-2 font-medium">Descida até o CT ({userPrefs.altitudeUnit}):</td>
                     <td className="py-2 text-center font-mono font-bold">
-                      {todDest.altitudeToLoseFt !== null ? `${todDest.altitudeToLoseFt} ft` : '—'}
+                      {todDest.altitudeToLoseFt !== null
+                        ? `${fromFeet(todDest.altitudeToLoseFt, userPrefs.altitudeUnit, 0)} ${userPrefs.altitudeUnit}`
+                        : '—'}
                     </td>
                     <td className="py-2 text-center font-mono font-bold">
-                      {todAlt.altitudeToLoseFt !== null ? `${todAlt.altitudeToLoseFt} ft` : '—'}
+                      {todAlt.altitudeToLoseFt !== null
+                        ? `${fromFeet(todAlt.altitudeToLoseFt, userPrefs.altitudeUnit, 0)} ${userPrefs.altitudeUnit}`
+                        : '—'}
                     </td>
                   </tr>
                   <tr>
@@ -1984,17 +2044,20 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   </tr>
                   <tr>
                     <td className="py-2 font-medium">
-                      <div>Velocidade Descida (kt):</div>
+                      <div>Velocidade Descida ({speedUnitLabel(userPrefs.speedUnit)}):</div>
                       <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
                     </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={effectiveDescentSpeedDestKts}
+                        value={fromKnots(effectiveDescentSpeedDestKts, userPrefs.speedUnit, 0)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            descentSpeedKts: e.target.value === '' ? '' : Number(e.target.value),
+                            descentSpeedKts: toKnots(
+                              e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.speedUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs font-semibold"
@@ -2003,12 +2066,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={effectiveDescentSpeedAltKts}
+                        value={fromKnots(effectiveDescentSpeedAltKts, userPrefs.speedUnit, 0)}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
-                            alternateDescentSpeedKts:
+                            alternateDescentSpeedKts: toKnots(
                               e.target.value === '' ? '' : Number(e.target.value),
+                              userPrefs.speedUnit
+                            ),
                           }))
                         }
                         className="w-20 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-center font-mono text-xs"
@@ -2017,15 +2082,17 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   </tr>
                   <tr className="bg-emerald-500/10">
                     <td className="py-2 px-1 font-bold text-emerald-700 dark:text-emerald-300">
-                      TOD (Distância NM):
+                      TOD (Distância {distanceUnitLabel(userPrefs.distanceUnit)}):
                     </td>
                     <td className="py-2 text-center font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
                       {todDest.todDistanceNm !== null
-                        ? `${todDest.todDistanceNm.toFixed(1)} NM`
+                        ? `${Number(fromNm(todDest.todDistanceNm, userPrefs.distanceUnit, 1)).toFixed(1)} ${distanceUnitLabel(userPrefs.distanceUnit)}`
                         : '—'}
                     </td>
                     <td className="py-2 text-center font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      {todAlt.todDistanceNm !== null ? `${todAlt.todDistanceNm.toFixed(1)} NM` : '—'}
+                      {todAlt.todDistanceNm !== null
+                        ? `${Number(fromNm(todAlt.todDistanceNm, userPrefs.distanceUnit, 1)).toFixed(1)} ${distanceUnitLabel(userPrefs.distanceUnit)}`
+                        : '—'}
                     </td>
                   </tr>
                 </tbody>
@@ -2266,16 +2333,19 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between">
                 <label className="font-medium text-slate-600 dark:text-slate-300">
-                  <div>Velocidade Entrada no Arco (kt):</div>
+                  <div>Velocidade Entrada no Arco ({speedUnitLabel(userPrefs.speedUnit)}):</div>
                   <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
                 </label>
                 <input
                   type="number"
-                  value={effectiveDmeArcSpeedKts}
+                  value={fromKnots(effectiveDmeArcSpeedKts, userPrefs.speedUnit, 0)}
                   onChange={(e) =>
                     onUpdatePlan((p) => ({
                       ...p,
-                      dmeArcEntrySpeedKts: e.target.value === '' ? '' : Number(e.target.value),
+                      dmeArcEntrySpeedKts: toKnots(
+                        e.target.value === '' ? '' : Number(e.target.value),
+                        userPrefs.speedUnit
+                      ),
                     }))
                   }
                   placeholder="Ex: 140"
@@ -2284,16 +2354,19 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               </div>
               <div className="flex items-center justify-between">
                 <label className="font-medium text-slate-600 dark:text-slate-300">
-                  Raio do Arco DME (NM):
+                  Raio do Arco DME ({distanceUnitLabel(userPrefs.distanceUnit)}):
                 </label>
                 <input
                   type="number"
                   step="0.5"
-                  value={plan.dmeArcRadiusNm}
+                  value={fromNm(plan.dmeArcRadiusNm, userPrefs.distanceUnit, 1)}
                   onChange={(e) =>
                     onUpdatePlan((p) => ({
                       ...p,
-                      dmeArcRadiusNm: e.target.value === '' ? '' : Number(e.target.value),
+                      dmeArcRadiusNm: toNm(
+                        e.target.value === '' ? '' : Number(e.target.value),
+                        userPrefs.distanceUnit
+                      ),
                     }))
                   }
                   placeholder="Ex: 12"
@@ -2302,10 +2375,12 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               </div>
               <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
                 <span className="font-bold text-emerald-800 dark:text-emerald-300">
-                  NM a Iniciar a Curva:
+                  {distanceUnitLabel(userPrefs.distanceUnit)} a Iniciar a Curva:
                 </span>
                 <span className="font-mono text-base font-bold text-emerald-600 dark:text-emerald-400">
-                  {dmeLeadNm !== null ? `${dmeLeadNm.toFixed(1)} NM` : '—'}
+                  {dmeLeadNm !== null
+                    ? `${Number(fromNm(dmeLeadNm, userPrefs.distanceUnit, 1)).toFixed(1)} ${distanceUnitLabel(userPrefs.distanceUnit)}`
+                    : '—'}
                 </span>
               </div>
             </div>

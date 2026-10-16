@@ -176,17 +176,61 @@ export interface FlightPlan {
   alternateDescentSpeedKts: number | '';
   dmeArcEntrySpeedKts: number | '';
   dmeArcRadiusNm: number | '';
-  // Phraseology optional extra fields
+  // Phraseology & Radio Frequencies Scratchpad fields
   parkingStand?: string;
+  originTaxiways?: string;
+  originAtisFreq?: string;
+  originAtisLetter?: string;
+  departureFreqTraffic?: string;
   departureFreqGround?: string;
   departureFreqTower?: string;
+  departureFreqRadio?: string;
+  departureAppName?: string;
   departureFreqApp?: string;
   enrouteCenterName?: string;
   enrouteFreqCenter?: string;
+  arrivalAppName?: string;
   arrivalFreqApp?: string;
+  arrivalAtisFreq?: string;
+  arrivalAtisLetter?: string;
+  arrivalFreqRadio?: string;
   arrivalFreqTower?: string;
   arrivalFreqGround?: string;
+  arrivalTaxiways?: string;
+  arrivalParkingStand?: string;
+  alternateFreq?: string;
+  unicomFreq?: string;
   sidOrExitProfile?: string;
   starOrApproachProfile?: string;
   transponderCode?: string;
 }
+
+export type WeightUnitPref = 'kg' | 'lbs';
+export type FuelVolumeUnitPref = 'L' | 'gal';
+export type SpeedUnitPref = 'kt' | 'km/h' | 'kmh' | 'mph';
+export type AltitudeUnitPref = 'ft' | 'm';
+export type DistanceUnitPref = 'NM' | 'nm' | 'km';
+export type VerticalSpeedUnitPref = 'fpm' | 'm/s' | 'mps';
+export type PressureUnitPref = 'hPa' | 'hpa' | 'inHg' | 'inhg';
+
+export interface UserPreferences {
+  weightUnit: WeightUnitPref;
+  fuelVolumeUnit: FuelVolumeUnitPref;
+  speedUnit: SpeedUnitPref;
+  altitudeUnit: AltitudeUnitPref;
+  distanceUnit: DistanceUnitPref;
+  verticalSpeedUnit: VerticalSpeedUnitPref;
+  pressureUnit: PressureUnitPref;
+}
+
+export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  weightUnit: 'kg',
+  fuelVolumeUnit: 'L',
+  speedUnit: 'kt',
+  altitudeUnit: 'ft',
+  distanceUnit: 'NM',
+  verticalSpeedUnit: 'fpm',
+  pressureUnit: 'hPa',
+};
+
+
