@@ -16,9 +16,17 @@ import {
   LogIn,
   X,
   RotateCcw,
+  Edit3,
+  Copy,
+  Check,
+  Eraser,
 } from 'lucide-react';
 import rawAerodromes from './data/aerodromes.json';
-import { DEFAULT_BASE_AIRCRAFT, DEFAULT_SAMPLE_FLIGHT_PLAN } from './data/baseAircraft';
+import {
+  DEFAULT_BASE_AIRCRAFT,
+  DEFAULT_SAMPLE_FLIGHT_PLAN,
+  createBlankFlightPlan,
+} from './data/baseAircraft';
 import type {
   Aerodrome,
   BaseAircraft,
@@ -417,10 +425,23 @@ export const App: React.FC = () => {
     ]
   );
 
-  // --- Handlers for Saving / Loading Plans ---
+  // --- State for inline renaming a saved flight plan in the modal ---
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editingPlanTitle, setEditingPlanTitle] = useState('');
+
+  // --- Handlers for Saving / Loading / Editing / Resetting Plans ---
+  const buildPlanTitle = (p: FlightPlan): string => {
+    if (p.title && p.title.trim()) return p.title.trim();
+    const orig = p.origin.icao.trim() || 'ORIG';
+    const dest = p.destination.icao.trim() || 'DEST';
+    const cs = p.callsign.trim() ? ` (${p.callsign.trim()})` : '';
+    return `${orig} → ${dest}${cs}`;
+  };
+
   const handleSaveCurrentPlan = async () => {
     const updated: FlightPlan = {
       ...plan,
+      title: buildPlanTitle(plan),
       updatedAt: new Date().toISOString(),
     };
     setPlan(updated);
@@ -439,28 +460,77 @@ export const App: React.FC = () => {
     setTimeout(() => setSaveFeedback(false), 2000);
   };
 
-  const handleCreateNewPlan = () => {
-    const blank: FlightPlan = {
-      ...DEFAULT_SAMPLE_FLIGHT_PLAN,
+  const handleSaveAsNewPlan = async () => {
+    const baseTitle = buildPlanTitle(plan);
+    const created: FlightPlan = {
+      ...plan,
       id: `plan-${Date.now()}`,
-      title: 'Novo Planejamento de Voo',
+      title: `${baseTitle} (Novo)`,
       updatedAt: new Date().toISOString(),
-      legs: [
-        {
-          id: `leg-${Date.now()}`,
-          origin: 'SBMT',
-          waypoint: '',
-          distanceNm: '',
-          magneticCourse: '',
-          iasKts: activeAircraft.defaultCruiseIasKts,
-          altitudeInput: '',
-          isReaCorridor: false,
-          windDirection: '',
-          windSpeedKts: '',
-          notes: '',
-        },
-      ],
     };
+    setPlan(created);
+    const nextList = [created, ...savedPlans];
+    setSavedPlans(nextList);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(nextList));
+
+    if (currentUser) {
+      try {
+        await saveUserFlightPlan(currentUser.uid, created);
+      } catch (err) {
+        console.warn('Error saving new flight plan to Firestore:', err);
+      }
+    }
+    setSaveFeedback(true);
+    setTimeout(() => setSaveFeedback(false), 2000);
+  };
+
+  const handleDuplicateSavedPlan = async (targetPlan: FlightPlan) => {
+    const duplicated: FlightPlan = {
+      ...targetPlan,
+      id: `plan-${Date.now()}`,
+      title: `${buildPlanTitle(targetPlan)} (Cópia)`,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextList = [duplicated, ...savedPlans];
+    setSavedPlans(nextList);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(nextList));
+
+    if (currentUser) {
+      try {
+        await saveUserFlightPlan(currentUser.uid, duplicated);
+      } catch (err) {
+        console.warn('Error saving duplicated plan to Firestore:', err);
+      }
+    }
+  };
+
+  const handleRenameSavedPlan = async (targetPlan: FlightPlan, newTitle: string) => {
+    const trimmed = newTitle.trim() || buildPlanTitle(targetPlan);
+    const updated: FlightPlan = {
+      ...targetPlan,
+      title: trimmed,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextList = savedPlans.map((p) => (p.id === updated.id ? updated : p));
+    setSavedPlans(nextList);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(nextList));
+    if (plan.id === updated.id) {
+      setPlan((prev) => ({ ...prev, title: trimmed }));
+    }
+    setEditingPlanId(null);
+    setEditingPlanTitle('');
+
+    if (currentUser) {
+      try {
+        await saveUserFlightPlan(currentUser.uid, updated);
+      } catch (err) {
+        console.warn('Error renaming plan in Firestore:', err);
+      }
+    }
+  };
+
+  const handleResetAllFields = () => {
+    const blank = createBlankFlightPlan();
     setPlan(blank);
     setShowPlansModal(false);
   };
@@ -469,6 +539,9 @@ export const App: React.FC = () => {
     const nextList = savedPlans.filter((p) => p.id !== id);
     setSavedPlans(nextList);
     localStorage.setItem(LOCAL_STORAGE_KEYS.SAVED_PLANS, JSON.stringify(nextList));
+    if (editingPlanId === id) {
+      setEditingPlanId(null);
+    }
     if (currentUser) {
       try {
         await deleteUserFlightPlan(currentUser.uid, id);
@@ -695,8 +768,18 @@ export const App: React.FC = () => {
             </button>
           </nav>
 
-          {/* Right Action Controls: Save Plan, My Flights, Admin, Theme, Google Auth */}
-          <div className="flex items-center gap-2">
+          {/* Right Action Controls: Reset, Save Plan, My Flights, Admin, Theme, Google Auth */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetAllFields}
+              title="Limpar e resetar todos os campos do planejamento atual"
+              className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 transition hover:bg-rose-500/20"
+            >
+              <Eraser className="h-3.5 w-3.5" />
+              <span>Limpar Campos</span>
+            </button>
+
             <button
               type="button"
               onClick={handleSaveCurrentPlan}
@@ -805,6 +888,7 @@ export const App: React.FC = () => {
           <FlightPlannerTab
             plan={plan}
             onUpdatePlan={setPlan}
+            onResetPlan={handleResetAllFields}
             aerodromes={allAerodromes}
             baseAircraftList={baseAircraftList}
             userFleet={userFleet}
@@ -896,17 +980,26 @@ export const App: React.FC = () => {
             <div className="mb-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={handleCreateNewPlan}
+                onClick={handleResetAllFields}
                 className="flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-500"
               >
                 <Plus className="h-4 w-4" />
-                <span>Novo Planejamento em Branco</span>
+                <span>Novo Planejamento (Limpar Tudo)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAsNewPlan}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+              >
+                <Save className="h-4 w-4" />
+                <span>Salvar Atual como Novo</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setPlan({
                     ...DEFAULT_SAMPLE_FLIGHT_PLAN,
+                    id: `sample-${Date.now()}`,
                     updatedAt: new Date().toISOString(),
                   });
                   setShowPlansModal(false);
@@ -918,53 +1011,132 @@ export const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {savedPlans.map((sp) => (
-                <div
-                  key={sp.id}
-                  className={`flex items-center justify-between rounded-xl border p-3 ${
-                    sp.id === plan.id
-                      ? 'border-sky-500 bg-sky-500/10'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-sky-600 dark:text-sky-400">
-                        {sp.origin.icao} → {sp.destination.icao} (Alt: {sp.alternate.icao})
-                      </span>
-                      <span className="rounded bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] font-semibold">
-                        {sp.callsign} • {sp.flightRule}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {sp.title}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPlan(sp);
-                        setShowPlansModal(false);
-                      }}
-                      className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+            {savedPlans.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-800 py-10 text-center">
+                <FolderKanban className="mx-auto h-8 w-8 text-slate-400" />
+                <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Nenhum planejamento de voo salvo.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Preencha os dados na tela principal e clique em "Salvar Voo" no topo para guardar seus planejamentos.
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-80 space-y-2.5 overflow-y-auto pr-1">
+                {savedPlans.map((sp) => {
+                  const isEditingThisTitle = editingPlanId === sp.id;
+                  const isActivePlan = sp.id === plan.id;
+
+                  return (
+                    <div
+                      key={sp.id}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 transition ${
+                        isActivePlan
+                          ? 'border-sky-500 bg-sky-500/10'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50'
+                      }`}
                     >
-                      Abrir
-                    </button>
-                    {savedPlans.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePlan(sp.id)}
-                        className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-500/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-sky-600 dark:text-sky-400">
+                            {sp.origin.icao || '----'} → {sp.destination.icao || '----'}{' '}
+                            {sp.alternate.icao ? `(Alt: ${sp.alternate.icao})` : ''}
+                          </span>
+                          <span className="rounded bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] font-semibold">
+                            {sp.callsign || 'SEM CALLSIGN'} • {sp.flightRule}
+                          </span>
+                          {isActivePlan && (
+                            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              Aberto no Painel
+                            </span>
+                          )}
+                        </div>
+
+                        {isEditingThisTitle ? (
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingPlanTitle}
+                              onChange={(e) => setEditingPlanTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameSavedPlan(sp, editingPlanTitle);
+                                if (e.key === 'Escape') setEditingPlanId(null);
+                              }}
+                              className="w-full max-w-xs rounded-lg border border-sky-500 bg-white dark:bg-slate-950 px-2.5 py-1 text-xs font-semibold focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRenameSavedPlan(sp, editingPlanTitle)}
+                              className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-500"
+                              title="Confirmar novo nome"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPlanId(null)}
+                              className="rounded-lg border border-slate-300 dark:border-slate-700 p-1.5 text-slate-500"
+                              title="Cancelar"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
+                              {sp.title || 'Planejamento sem título'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPlanId(sp.id);
+                                setEditingPlanTitle(sp.title || buildPlanTitle(sp));
+                              }}
+                              className="rounded p-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-sky-500"
+                              title="Renomear este planejamento"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlan(sp);
+                            setActiveTab('planner');
+                            setShowPlansModal(false);
+                          }}
+                          className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+                          title="Carregar este voo no painel para visualizar ou editar"
+                        >
+                          {isActivePlan ? 'Editar' : 'Abrir / Editar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateSavedPlan(sp)}
+                          className="rounded-lg border border-slate-300 dark:border-slate-700 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                          title="Duplicar planejamento"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePlan(sp.id)}
+                          className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-500 hover:bg-rose-500/20"
+                          title="Apagar este voo salvo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

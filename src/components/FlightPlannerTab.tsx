@@ -48,6 +48,7 @@ import {
 interface FlightPlannerTabProps {
   plan: FlightPlan;
   onUpdatePlan: (updater: (prev: FlightPlan) => FlightPlan) => void;
+  onResetPlan: () => void;
   aerodromes: Aerodrome[];
   baseAircraftList: BaseAircraft[];
   userFleet: UserAircraftPrefix[];
@@ -81,6 +82,7 @@ const USEFUL_LINKS = [
 export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
   plan,
   onUpdatePlan,
+  onResetPlan,
   aerodromes,
   baseAircraftList,
   userFleet,
@@ -418,7 +420,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 font-mono text-sm font-semibold focus:border-sky-500 focus:outline-none"
             />
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-1">
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
               Identificação / Nome do Planejamento
             </label>
@@ -430,14 +432,23 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-sm font-medium focus:border-sky-500 focus:outline-none"
             />
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
             <button
               type="button"
               onClick={handleFetchAllWeather}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-500"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-500"
             >
-              <CloudSun className="h-4 w-4" />
-              <span>Atualizar METAR/TAF (Todos)</span>
+              <CloudSun className="h-4 w-4 shrink-0" />
+              <span>Atualizar METAR/TAF</span>
+            </button>
+            <button
+              type="button"
+              onClick={onResetPlan}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 transition hover:bg-rose-500/20"
+              title="Zerar e limpar todos os campos do planejamento"
+            >
+              <Trash2 className="h-4 w-4 shrink-0" />
+              <span>Resetar Tudo</span>
             </button>
           </div>
         </div>
