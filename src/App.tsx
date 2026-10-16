@@ -268,6 +268,9 @@ export const App: React.FC = () => {
     if (plan.selectedAircraftSource === 'prefix' && plan.selectedPrefixId) {
       const pref = userFleet.find((p) => p.id === plan.selectedPrefixId);
       if (pref) {
+        const cruiseIas = pref.defaultCruiseIasKts || 110;
+        const descentIas = pref.defaultDescentIasKts || Math.round(cruiseIas * 0.9);
+        const descentVs = pref.defaultDescentVsFpm || 600;
         return {
           name: `${pref.registration} (${pref.baseAircraftName})`,
           typeIcaoWake: `${pref.aircraftTypeCode}/${pref.icaoCode}/${pref.wakeTurbulence}`,
@@ -276,7 +279,21 @@ export const App: React.FC = () => {
           fuelCapacityDisplay: pref.fuelCapacityDisplay,
           emptyWeightKg: pref.emptyWeightKg,
           propulsionType: pref.propulsionType,
-          defaultCruiseIasKts: pref.defaultCruiseIasKts,
+          defaultCruiseIasKts: cruiseIas,
+          defaultDescentIasKts: descentIas,
+          defaultDescentVsFpm: descentVs,
+          alternateSpeedKts: pref.alternateSpeedKts || descentIas,
+          alternateFuelFlowLph: pref.alternateFuelFlowLph || pref.fuelConsumptionLph,
+          climbSpeedKts: pref.climbSpeedKts || Math.round(cruiseIas * 0.75),
+          climbVsFpm: pref.climbVsFpm || descentVs,
+          climbFuelFlowLph: pref.climbFuelFlowLph || Math.round(pref.fuelConsumptionLph * 1.25),
+          descentFuelFlowLph: pref.descentFuelFlowLph || Math.round(pref.fuelConsumptionLph * 0.65),
+          fuelType:
+            pref.fuelType ||
+            (pref.propulsionType === 'Aviões jato' ? 'Jet A-1' : 'Avgas (100LL)'),
+          simulator: pref.simulator || 'MSFS',
+          minRunwayLengthFt: pref.minRunwayLengthFt ?? 0,
+          runwaySurfaceType: pref.runwaySurfaceType || 'Hard and Soft',
         };
       }
     }
@@ -284,6 +301,9 @@ export const App: React.FC = () => {
       baseAircraftList.find((b) => b.id === plan.selectedBaseAircraftId) ||
       baseAircraftList[0] ||
       DEFAULT_BASE_AIRCRAFT[0];
+    const cruiseIas = base.defaultCruiseIasKts || 110;
+    const descentIas = base.defaultDescentIasKts || Math.round(cruiseIas * 0.9);
+    const descentVs = base.defaultDescentVsFpm || 600;
     return {
       name: base.name,
       typeIcaoWake: `${base.aircraftTypeCode}/${base.icaoCode}/${base.wakeTurbulence}`,
@@ -292,7 +312,20 @@ export const App: React.FC = () => {
       fuelCapacityDisplay: base.fuelCapacityDisplay,
       emptyWeightKg: base.emptyWeightKg,
       propulsionType: base.propulsionType as PropulsionType,
-      defaultCruiseIasKts: base.defaultCruiseIasKts,
+      defaultCruiseIasKts: cruiseIas,
+      defaultDescentIasKts: descentIas,
+      defaultDescentVsFpm: descentVs,
+      alternateSpeedKts: base.alternateSpeedKts || descentIas,
+      alternateFuelFlowLph: base.alternateFuelFlowLph || base.fuelConsumptionLph,
+      climbSpeedKts: base.climbSpeedKts || Math.round(cruiseIas * 0.75),
+      climbVsFpm: base.climbVsFpm || descentVs,
+      climbFuelFlowLph: base.climbFuelFlowLph || Math.round(base.fuelConsumptionLph * 1.25),
+      descentFuelFlowLph: base.descentFuelFlowLph || Math.round(base.fuelConsumptionLph * 0.65),
+      fuelType:
+        base.fuelType || (base.propulsionType === 'Aviões jato' ? 'Jet A-1' : 'Avgas (100LL)'),
+      simulator: base.simulator || 'MSFS',
+      minRunwayLengthFt: base.minRunwayLengthFt ?? 0,
+      runwaySurfaceType: base.runwaySurfaceType || 'Hard and Soft',
     };
   }, [
     plan.selectedAircraftSource,
@@ -313,14 +346,18 @@ export const App: React.FC = () => {
     let runningEtoSeconds: number | null = departureSeconds;
 
     for (const leg of plan.legs) {
+      const effectiveLeg = {
+        ...leg,
+        iasKts: leg.iasKts !== '' ? leg.iasKts : activeAircraft.defaultCruiseIasKts,
+      };
       const comp = computeRouteLeg(
-        leg,
+        effectiveLeg,
         runningEtoSeconds,
         departureSeconds,
         activeAircraft.fuelConsumptionLph,
         plan.fuelUnit,
         plan.flightRule,
-        plan.origin.transitionAltitudeFt,
+        plan.origin.transitionAltitudeFt || 6000,
         'AB'
       );
       if (comp.durationMinutes !== null) {
@@ -334,6 +371,7 @@ export const App: React.FC = () => {
     plan.legs,
     departureSeconds,
     activeAircraft.fuelConsumptionLph,
+    activeAircraft.defaultCruiseIasKts,
     plan.fuelUnit,
     plan.flightRule,
     plan.origin.transitionAltitudeFt,
@@ -348,21 +386,30 @@ export const App: React.FC = () => {
           )
         : departureSeconds;
 
+    const effectiveAltLeg = {
+      ...plan.alternateLeg,
+      iasKts:
+        plan.alternateLeg.iasKts !== ''
+          ? plan.alternateLeg.iasKts
+          : activeAircraft.alternateSpeedKts,
+    };
+
     return computeRouteLeg(
-      plan.alternateLeg,
+      effectiveAltLeg,
       lastEto,
       departureSeconds,
-      activeAircraft.fuelConsumptionLph,
+      activeAircraft.alternateFuelFlowLph,
       plan.fuelUnit,
       plan.flightRule,
-      plan.destination.transitionAltitudeFt,
+      plan.destination.transitionAltitudeFt || 6000,
       'BC'
     );
   }, [
     plan.alternateLeg,
     computedLegsAB,
     departureSeconds,
-    activeAircraft.fuelConsumptionLph,
+    activeAircraft.alternateFuelFlowLph,
+    activeAircraft.alternateSpeedKts,
     plan.fuelUnit,
     plan.flightRule,
     plan.destination.transitionAltitudeFt,

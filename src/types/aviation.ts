@@ -16,6 +16,9 @@ export interface Aerodrome {
   isCustom?: boolean;
 }
 
+export type RunwaySurfaceType = 'Hard and Soft' | 'Hard only' | 'Soft only' | 'Water';
+export type AircraftFuelType = 'Avgas (100LL)' | 'Jet A-1';
+
 export interface BaseAircraft {
   id: string;
   name: string;
@@ -23,13 +26,31 @@ export interface BaseAircraft {
   icaoCode: string;         // e.g., 'C172', 'PC12', 'B738'
   wakeTurbulence: WakeTurbulenceCategory;
   performanceCategory: PerformanceCategory;
-  fuelConsumptionLph: number; // Liters per hour (0 if N/A)
+  fuelConsumptionLph: number; // Cruise fuel flow in Liters per hour
   fuelCapacityDisplay: string;
   emptyWeightKg: number;
   propulsionType: PropulsionType;
   defaultCruiseIasKts: number;
   defaultDescentIasKts: number;
   defaultDescentVsFpm: number;
+  // Little Navmap Extended Performance Profile fields
+  simulator?: string;
+  minRunwayLengthFt?: number;
+  runwaySurfaceType?: RunwaySurfaceType;
+  fuelType?: AircraftFuelType;
+  usableFuelLiters?: number;
+  reserveFuelLiters?: number;
+  taxiFuelLiters?: number;
+  extraFuelLiters?: number;
+  contingencyPercent?: number;
+  climbSpeedKts?: number;
+  climbVsFpm?: number;
+  climbFuelFlowLph?: number;
+  descentFuelFlowLph?: number;
+  alternateSpeedKts?: number;
+  alternateFuelFlowLph?: number;
+  operatorName?: string;
+  notes?: string;
 }
 
 export interface UserAircraftPrefix {
@@ -50,6 +71,22 @@ export interface UserAircraftPrefix {
   defaultDescentVsFpm: number;
   operatorName: string;
   notes?: string;
+  // Little Navmap Extended Performance Profile fields
+  simulator?: string;
+  minRunwayLengthFt?: number;
+  runwaySurfaceType?: RunwaySurfaceType;
+  fuelType?: AircraftFuelType;
+  usableFuelLiters?: number;
+  reserveFuelLiters?: number;
+  taxiFuelLiters?: number;
+  extraFuelLiters?: number;
+  contingencyPercent?: number;
+  climbSpeedKts?: number;
+  climbVsFpm?: number;
+  climbFuelFlowLph?: number;
+  descentFuelFlowLph?: number;
+  alternateSpeedKts?: number;
+  alternateFuelFlowLph?: number;
 }
 
 export interface ChartChecklist {

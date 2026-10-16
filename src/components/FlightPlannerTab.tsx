@@ -64,6 +64,18 @@ interface FlightPlannerTabProps {
     emptyWeightKg: number;
     propulsionType: PropulsionType;
     defaultCruiseIasKts: number;
+    defaultDescentIasKts: number;
+    defaultDescentVsFpm: number;
+    alternateSpeedKts: number;
+    alternateFuelFlowLph: number;
+    climbSpeedKts: number;
+    climbVsFpm: number;
+    climbFuelFlowLph: number;
+    descentFuelFlowLph: number;
+    fuelType: string;
+    simulator: string;
+    minRunwayLengthFt: number;
+    runwaySurfaceType: string;
   };
   computedLegsAB: ComputedRouteLeg[];
   computedLegBC: ComputedRouteLeg;
@@ -183,23 +195,55 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     if (val.startsWith('prefix:')) {
       const prefixId = val.replace('prefix:', '');
       const found = userFleet.find((p) => p.id === prefixId);
+      const newCruiseIas = found?.defaultCruiseIasKts || 110;
+      const newAltIas = found?.alternateSpeedKts || found?.defaultDescentIasKts || newCruiseIas;
       onUpdatePlan((prev) => ({
         ...prev,
         selectedAircraftSource: 'prefix',
         selectedPrefixId: prefixId,
         operatorRemark: found?.operatorName || prev.operatorRemark,
-        descentSpeedKts: found?.defaultDescentIasKts ?? prev.descentSpeedKts,
-        descentVerticalSpeedFpm: found?.defaultDescentVsFpm ?? prev.descentVerticalSpeedFpm,
+        legs: prev.legs.map((l) => ({
+          ...l,
+          iasKts:
+            l.iasKts === '' || l.iasKts === activeAircraft.defaultCruiseIasKts
+              ? newCruiseIas
+              : l.iasKts,
+        })),
+        alternateLeg: {
+          ...prev.alternateLeg,
+          iasKts: newAltIas,
+        },
+        descentSpeedKts: '',
+        descentVerticalSpeedFpm: '',
+        alternateDescentSpeedKts: '',
+        alternateDescentVerticalSpeedFpm: '',
+        dmeArcEntrySpeedKts: '',
       }));
     } else {
       const baseId = val.replace('base:', '');
       const found = baseAircraftList.find((b) => b.id === baseId);
+      const newCruiseIas = found?.defaultCruiseIasKts || 110;
+      const newAltIas = found?.alternateSpeedKts || found?.defaultDescentIasKts || newCruiseIas;
       onUpdatePlan((prev) => ({
         ...prev,
         selectedAircraftSource: 'base',
         selectedBaseAircraftId: baseId,
-        descentSpeedKts: found?.defaultDescentIasKts ?? prev.descentSpeedKts,
-        descentVerticalSpeedFpm: found?.defaultDescentVsFpm ?? prev.descentVerticalSpeedFpm,
+        legs: prev.legs.map((l) => ({
+          ...l,
+          iasKts:
+            l.iasKts === '' || l.iasKts === activeAircraft.defaultCruiseIasKts
+              ? newCruiseIas
+              : l.iasKts,
+        })),
+        alternateLeg: {
+          ...prev.alternateLeg,
+          iasKts: newAltIas,
+        },
+        descentSpeedKts: '',
+        descentVerticalSpeedFpm: '',
+        alternateDescentSpeedKts: '',
+        alternateDescentVerticalSpeedFpm: '',
+        dmeArcEntrySpeedKts: '',
       }));
     }
   };
@@ -310,6 +354,50 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
       ? ['WAC', 'VAC', 'ADC', 'PDC', 'REA/H']
       : ['ERC', 'ADC', 'PDC', 'SID', 'STAR'];
 
+  // --- Section 7 Automated Parameters from Aircraft Profile & Route ---
+  const validRouteAltitudesFt = computedLegsAB
+    .map((l) => l.altitudeFeet)
+    .filter((ft): ft is number => ft !== null && ft > 0);
+
+  const autoCruiseAltDestFt: number | '' =
+    validRouteAltitudesFt.length > 0 ? Math.max(...validRouteAltitudesFt) : '';
+
+  const autoCruiseAltAltFt: number | '' =
+    computedLegBC.altitudeFeet && computedLegBC.altitudeFeet > 0
+      ? computedLegBC.altitudeFeet
+      : autoCruiseAltDestFt;
+
+  const effectiveDescentCruiseAltDestFt: number | '' =
+    plan.descentCruiseAltitudeFt !== '' ? plan.descentCruiseAltitudeFt : autoCruiseAltDestFt;
+
+  const effectiveDescentCruiseAltAltFt: number | '' =
+    plan.alternateDescentCruiseAltitudeFt !== ''
+      ? plan.alternateDescentCruiseAltitudeFt
+      : autoCruiseAltAltFt;
+
+  const effectiveDescentVsDestFpm: number | '' =
+    plan.descentVerticalSpeedFpm !== ''
+      ? plan.descentVerticalSpeedFpm
+      : activeAircraft.defaultDescentVsFpm;
+
+  const effectiveDescentVsAltFpm: number | '' =
+    plan.alternateDescentVerticalSpeedFpm !== ''
+      ? plan.alternateDescentVerticalSpeedFpm
+      : activeAircraft.defaultDescentVsFpm;
+
+  const effectiveDescentSpeedDestKts: number | '' =
+    plan.descentSpeedKts !== '' ? plan.descentSpeedKts : activeAircraft.defaultDescentIasKts;
+
+  const effectiveDescentSpeedAltKts: number | '' =
+    plan.alternateDescentSpeedKts !== ''
+      ? plan.alternateDescentSpeedKts
+      : activeAircraft.alternateSpeedKts;
+
+  const effectiveDmeArcSpeedKts: number | '' =
+    plan.dmeArcEntrySpeedKts !== ''
+      ? plan.dmeArcEntrySpeedKts
+      : activeAircraft.defaultDescentIasKts;
+
   // --- Section 7 Computations ---
   const ctOrigin = computeTrafficPatternAltitude(
     plan.flightRule,
@@ -334,47 +422,56 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
   );
 
   const todDest = computeTopOfDescent(
-    plan.descentCruiseAltitudeFt,
+    effectiveDescentCruiseAltDestFt,
     ctDest.effectiveFt,
-    plan.descentVerticalSpeedFpm,
-    plan.descentSpeedKts
+    effectiveDescentVsDestFpm,
+    effectiveDescentSpeedDestKts
   );
   const todAlt = computeTopOfDescent(
-    plan.alternateDescentCruiseAltitudeFt,
+    effectiveDescentCruiseAltAltFt,
     ctAlt.effectiveFt,
-    plan.alternateDescentVerticalSpeedFpm,
-    plan.alternateDescentSpeedKts
+    effectiveDescentVsAltFpm,
+    effectiveDescentSpeedAltKts
   );
 
   const rwyOrigin = computeActiveRunway(
     originAerodrome?.runway1 || '',
     originAerodrome?.runway2 || '',
     plan.origin.metarWindDirection,
-    plan.origin.magneticDeclination
+    plan.origin.magneticDeclination !== '' ? plan.origin.magneticDeclination : -21
   );
   const rwyDest = computeActiveRunway(
     destinationAerodrome?.runway1 || '',
     destinationAerodrome?.runway2 || '',
-    plan.destination.metarWindDirection,
-    plan.destination.magneticDeclination
+    plan.destination.metarWindDirection !== ''
+      ? plan.destination.metarWindDirection
+      : plan.origin.metarWindDirection || plan.alternate.metarWindDirection,
+    plan.destination.magneticDeclination !== '' ? plan.destination.magneticDeclination : -21
   );
   const rwyAlt = computeActiveRunway(
     alternateAerodrome?.runway1 || '',
     alternateAerodrome?.runway2 || '',
     plan.alternate.metarWindDirection,
-    plan.alternate.magneticDeclination
+    plan.alternate.magneticDeclination !== '' ? plan.alternate.magneticDeclination : -21
   );
 
+  const effectiveDestQnhHpa =
+    plan.destination.qnhHpa !== ''
+      ? plan.destination.qnhHpa
+      : plan.origin.qnhHpa !== ''
+      ? plan.origin.qnhHpa
+      : plan.alternate.qnhHpa;
+
   const tlDest = computeTransitionLevel(
-    plan.destination.qnhHpa,
-    plan.destination.transitionAltitudeFt
+    effectiveDestQnhHpa,
+    plan.destination.transitionAltitudeFt || 6000
   );
   const tlAlt = computeTransitionLevel(
     plan.alternate.qnhHpa,
-    plan.alternate.transitionAltitudeFt
+    plan.alternate.transitionAltitudeFt || 6000
   );
 
-  const dmeLeadNm = computeDmeArcLeadDistanceNm(plan.dmeArcEntrySpeedKts, plan.dmeArcRadiusNm);
+  const dmeLeadNm = computeDmeArcLeadDistanceNm(effectiveDmeArcSpeedKts, plan.dmeArcRadiusNm);
 
   const atcRouteString = buildAtcRouteString(
     plan.legs,
@@ -1608,26 +1705,37 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
 
           {/* 7B: Ideal de Descida até o Circuito de Tráfego (TOD) */}
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              Ideal de Descida — TOD (Top of Descent)
-            </h3>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                Ideal de Descida — TOD (Top of Descent)
+              </h3>
+              {Number(effectiveDescentSpeedDestKts) > 0 &&
+                Number(effectiveDescentVsDestFpm) > 0 && (
+                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    {((Number(effectiveDescentSpeedDestKts) / 60) * (1000 / Number(effectiveDescentVsDestFpm))).toFixed(1)} NM / 1.000 ft
+                  </span>
+                )}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] text-slate-500">
                     <th className="py-1.5 text-left">Parâmetro</th>
-                    <th className="py-1.5 text-center">Destino ({plan.destination.icao})</th>
-                    <th className="py-1.5 text-center">Altern. ({plan.alternate.icao})</th>
+                    <th className="py-1.5 text-center">Destino ({plan.destination.icao || 'DEST'})</th>
+                    <th className="py-1.5 text-center">Altern. ({plan.alternate.icao || 'ALT'})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800">
                   <tr>
-                    <td className="py-2 font-medium">Altitude Cruzeiro (ft):</td>
+                    <td className="py-2 font-medium">
+                      <div>Altitude Cruzeiro (ft):</div>
+                      <div className="text-[10px] font-normal text-slate-400">Auto da Rota</div>
+                    </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
                         step={100}
-                        value={plan.descentCruiseAltitudeFt}
+                        value={effectiveDescentCruiseAltDestFt}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1642,7 +1750,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <input
                         type="number"
                         step={100}
-                        value={plan.alternateDescentCruiseAltitudeFt}
+                        value={effectiveDescentCruiseAltAltFt}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1655,12 +1763,15 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-2 font-medium">Vertical Speed (fpm):</td>
+                    <td className="py-2 font-medium">
+                      <div>Vertical Speed (fpm):</div>
+                      <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
+                    </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={100}
-                        value={plan.descentVerticalSpeedFpm}
+                        step={50}
+                        value={effectiveDescentVsDestFpm}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1674,8 +1785,8 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        step={100}
-                        value={plan.alternateDescentVerticalSpeedFpm}
+                        step={50}
+                        value={effectiveDescentVsAltFpm}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1706,11 +1817,14 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-2 font-medium">Velocidade Descida (kt):</td>
+                    <td className="py-2 font-medium">
+                      <div>Velocidade Descida (kt):</div>
+                      <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
+                    </td>
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={plan.descentSpeedKts}
+                        value={effectiveDescentSpeedDestKts}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1723,7 +1837,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                     <td className="py-2 text-center">
                       <input
                         type="number"
-                        value={plan.alternateDescentSpeedKts}
+                        value={effectiveDescentSpeedAltKts}
                         onChange={(e) =>
                           onUpdatePlan((p) => ({
                             ...p,
@@ -1811,7 +1925,11 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <td key={key} className="py-1.5">
                         <input
                           type="number"
-                          value={plan[key].magneticDeclination}
+                          value={
+                            plan[key].magneticDeclination !== ''
+                              ? plan[key].magneticDeclination
+                              : -21
+                          }
                           onChange={(e) =>
                             onUpdatePlan((p) => ({
                               ...p,
@@ -1955,8 +2073,8 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   {tlDest}
                 </div>
                 <div className="mt-1 text-[10px] text-slate-500">
-                  TA: {plan.destination.transitionAltitudeFt || '—'} ft • QNH:{' '}
-                  {plan.destination.qnhHpa || '—'}
+                  TA: {plan.destination.transitionAltitudeFt || 6000} ft • QNH:{' '}
+                  {effectiveDestQnhHpa || '—'}
                 </div>
               </div>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-center">
@@ -1967,7 +2085,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   {tlAlt}
                 </div>
                 <div className="mt-1 text-[10px] text-slate-500">
-                  TA: {plan.alternate.transitionAltitudeFt || '—'} ft • QNH:{' '}
+                  TA: {plan.alternate.transitionAltitudeFt || 6000} ft • QNH:{' '}
                   {plan.alternate.qnhHpa || '—'}
                 </div>
               </div>
@@ -1982,11 +2100,12 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between">
                 <label className="font-medium text-slate-600 dark:text-slate-300">
-                  Velocidade Entrada no Arco (kt):
+                  <div>Velocidade Entrada no Arco (kt):</div>
+                  <div className="text-[10px] font-normal text-slate-400">Auto da Aeronave</div>
                 </label>
                 <input
                   type="number"
-                  value={plan.dmeArcEntrySpeedKts}
+                  value={effectiveDmeArcSpeedKts}
                   onChange={(e) =>
                     onUpdatePlan((p) => ({
                       ...p,
