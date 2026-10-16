@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#162137" />
+      <stop offset="100%" stop-color="#0E1626" />
+    </linearGradient>
+    <linearGradient id="wingLight" x1="128" y1="266" x2="348" y2="164" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1CA2EC" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="wingDark" x1="220" y1="382" x2="348" y2="164" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0369A1" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+    <linearGradient id="trailGrad" x1="92" y1="392" x2="210" y2="302" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1CA2EC" stop-opacity="0" />
+      <stop offset="35%" stop-color="#1CA2EC" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#29ABE2" stop-opacity="0.95" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded App Icon Background -->
+  <rect width="512" height="512" rx="114" fill="url(#bgGrad)" />
+
+  <!-- Outer & Inner Compass Rings -->
+  <circle cx="256" cy="256" r="184" stroke="#25344E" stroke-width="6" />
+  <circle cx="256" cy="256" r="142" stroke="#1B283F" stroke-width="2.5" />
+
+  <!-- North Heading Bug / Pointer -->
+  <polygon points="256,50 245,76 267,76" fill="#29ABE2" />
+
+  <!-- Cardinal Ticks (W, E, S) -->
+  <line x1="56" y1="256" x2="84" y2="256" stroke="#425370" stroke-width="8" stroke-linecap="round" />
+  <line x1="428" y1="256" x2="456" y2="256" stroke="#425370" stroke-width="8" stroke-linecap="round" />
+  <line x1="256" y1="428" x2="256" y2="456" stroke="#425370" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Subtle Intercardinal Ticks (NW, SE) -->
+  <line x1="126" y1="126" x2="137" y2="137" stroke="#33445F" stroke-width="4" stroke-linecap="round" />
+  <line x1="375" y1="375" x2="386" y2="386" stroke="#33445F" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Curved Flight Path Trail -->
+  <path
+    d="M 88 394 Q 148 386 208 302"
+    fill="none"
+    stroke="url(#trailGrad)"
+    stroke-width="14"
+    stroke-linecap="round"
+  />
+
+  <!-- Origin Node on the Compass Ring (SW) -->
+  <circle cx="152" cy="364" r="9" fill="#131D31" stroke="#29ABE2" stroke-width="4.5" />
+
+  <!-- Glowing Emerald Waypoint (NE) -->
+  <circle cx="386" cy="126" r="32" fill="#10B981" fill-opacity="0.22" />
+  <circle cx="386" cy="126" r="16" fill="#10B981" />
+
+  <!-- Two-Tone Delta Wing -->
+  <polygon points="348,164 128,266 220,290" fill="url(#wingLight)" />
+  <polygon points="348,164 220,290 248,382" fill="url(#wingDark)" />
+</svg>

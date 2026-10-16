@@ -778,26 +778,33 @@ export const App: React.FC = () => {
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3">
-          {/* Brand Logo */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-md shadow-sky-500/20">
-              <Compass className="h-6 w-6" />
-            </div>
+          {/* Brand Logo (matches horizontal lockup + vector emblem) */}
+          <div className="flex items-center gap-3.5">
+            <img
+              src="/favicon.svg"
+              alt="PB Flight Planner Logo"
+              className="h-12 w-12 shrink-0 rounded-xl shadow-md shadow-sky-950/50 ring-1 ring-slate-700/50"
+            />
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  PB FLIGHT PLANNER
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+                  <span className="text-[#29ABE2] dark:text-[#38BDF8]">PB</span>{' '}
+                  <span>FLIGHT PLANNER</span>
                 </h1>
                 <span className="rounded-md bg-sky-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-sky-600 dark:text-sky-400">
-                  VFR & IFR • DECEA
+                  VFR &amp; IFR • DECEA
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Planejamento Operacional, Navegação, Combustível & Fraseologia Dinâmica •{' '}
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
+                <span className="inline-block h-[2px] w-5 rounded-full bg-[#29ABE2]" />
+                <span className="font-mono font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-400">
+                  EFB &amp; NAVIGATION
+                </span>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
                 <span className="font-semibold text-amber-600 dark:text-amber-400">
                   Uso exclusivo para simulação aérea
                 </span>
-              </p>
+              </div>
             </div>
           </div>
 
