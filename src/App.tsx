@@ -385,15 +385,38 @@ export const App: React.FC = () => {
     plan.cargoWeightKg,
   ]);
 
-  // Predominant cruising altitude for Phraseology
+  // Predominant cruising altitude for Phraseology (matching GP!AV44:AY61 mode / highest frequency altitude)
   const predominantAltitudeCode = useMemo(() => {
     const validFeet = computedLegsAB
       .map((l) => l.altitudeFeet)
       .filter((ft): ft is number => ft !== null && ft > 0);
-    if (validFeet.length === 0) return plan.flightRule === 'VFR' ? 'A045' : 'FL060';
-    const maxFt = Math.max(...validFeet);
-    return formatAltitudeOrFlightLevel(maxFt, plan.origin.transitionAltitudeFt).code;
-  }, [computedLegsAB, plan.flightRule, plan.origin.transitionAltitudeFt]);
+
+    if (validFeet.length > 0) {
+      // Sort descending so ties prefer the higher cruising altitude (like LARGE in GP!AV44:AV59)
+      const sortedDesc = [...validFeet].sort((a, b) => b - a);
+      const counts = new Map<number, number>();
+      for (const ft of sortedDesc) {
+        counts.set(ft, (counts.get(ft) || 0) + 1);
+      }
+      let modeFt = sortedDesc[0];
+      let maxCount = 0;
+      for (const ft of sortedDesc) {
+        const count = counts.get(ft) || 0;
+        if (count > maxCount) {
+          maxCount = count;
+          modeFt = ft;
+        }
+      }
+      return formatAltitudeOrFlightLevel(modeFt, plan.origin.transitionAltitudeFt).code;
+    }
+
+    const fallbackCruiseFt = Number(plan.descentCruiseAltitudeFt);
+    if (Number.isFinite(fallbackCruiseFt) && fallbackCruiseFt > 0) {
+      return formatAltitudeOrFlightLevel(fallbackCruiseFt, plan.origin.transitionAltitudeFt).code;
+    }
+
+    return '';
+  }, [computedLegsAB, plan.descentCruiseAltitudeFt, plan.origin.transitionAltitudeFt]);
 
   const originActiveRunway = useMemo(
     () =>
@@ -906,7 +929,6 @@ export const App: React.FC = () => {
         {activeTab === 'phraseology' && (
           <PhraseologyTab
             plan={plan}
-            onUpdatePlan={setPlan}
             originAerodrome={originAerodrome}
             destinationAerodrome={destinationAerodrome}
             alternateAerodrome={alternateAerodrome}
