@@ -34,7 +34,7 @@ export interface BaseAircraft {
 
 export interface UserAircraftPrefix {
   id: string;
-  registration: string;     // e.g., 'PR-DAN', 'PT-GLD'
+  registration: string;     // e.g., 'PR-DAN', 'PS-PBV'
   baseAircraftId: string;
   baseAircraftName: string;
   aircraftTypeCode: string;

@@ -143,10 +143,19 @@ export const App: React.FC = () => {
 
   const [globalExtraAerodromes, setGlobalExtraAerodromes] = useState<Aerodrome[]>([]);
 
+  const sanitizeFlightPlan = (p: FlightPlan): FlightPlan => ({
+    ...p,
+    callsign: p.callsign === 'GLD1537' ? '' : p.callsign,
+    operatorRemark:
+      p.operatorRemark && p.operatorRemark.toUpperCase().includes('GOLD')
+        ? 'PARTICULAR'
+        : p.operatorRemark,
+  });
+
   const [plan, setPlan] = useState<FlightPlan>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.CURRENT_PLAN);
-      return saved ? JSON.parse(saved) : DEFAULT_SAMPLE_FLIGHT_PLAN;
+      return saved ? sanitizeFlightPlan(JSON.parse(saved)) : DEFAULT_SAMPLE_FLIGHT_PLAN;
     } catch {
       return DEFAULT_SAMPLE_FLIGHT_PLAN;
     }
@@ -155,7 +164,8 @@ export const App: React.FC = () => {
   const [savedPlans, setSavedPlans] = useState<FlightPlan[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.SAVED_PLANS);
-      return saved ? JSON.parse(saved) : [DEFAULT_SAMPLE_FLIGHT_PLAN];
+      const parsed: FlightPlan[] = saved ? JSON.parse(saved) : [DEFAULT_SAMPLE_FLIGHT_PLAN];
+      return parsed.map(sanitizeFlightPlan);
     } catch {
       return [DEFAULT_SAMPLE_FLIGHT_PLAN];
     }

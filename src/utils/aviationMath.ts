@@ -381,11 +381,14 @@ export function buildRemarkString(
   callsign: string,
   originIcao: string
 ): string {
-  const opr = (operatorName || 'GOLD VIRTUAL AIRLINES').trim().toUpperCase();
+  const cleanOpr =
+    !operatorName || operatorName.trim().toUpperCase().includes('GOLD')
+      ? 'PARTICULAR'
+      : operatorName.trim().toUpperCase();
   const per = (performanceCategory || 'A').trim().toUpperCase();
-  const cs = (callsign || 'GLD0000').trim().toUpperCase();
+  const cs = (callsign || 'PRDAN').trim().toUpperCase();
   const orig = (originIcao || 'ZZZZ').trim().toUpperCase();
-  return `OPR/${opr} /PER ${per} /RMK PIC ${cs} /FROM ${orig}`;
+  return `OPR/${cleanOpr} /PER ${per} /RMK PIC ${cs} /FROM ${orig}`;
 }
 
 /**

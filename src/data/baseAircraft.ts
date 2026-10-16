@@ -202,7 +202,7 @@ export const DEFAULT_SAMPLE_FLIGHT_PLAN: FlightPlan = {
   id: 'sample-sbmt-sdam',
   title: 'SBMT → SDAM (Campo de Marte para Amarais via REA)',
   updatedAt: new Date().toISOString(),
-  callsign: 'GLD1537',
+  callsign: 'PR-DAN',
   departureTimeUtc: '1108',
   origin: {
     icao: 'SBMT',
@@ -271,7 +271,7 @@ export const DEFAULT_SAMPLE_FLIGHT_PLAN: FlightPlan = {
   flightRule: 'VFR',
   flightPeriod: 'Diurno',
   groundContingency: true,
-  operatorRemark: 'GOLD VIRTUAL AIRLINES',
+  operatorRemark: 'PARTICULAR',
   legs: [
     {
       id: 'leg-1',
@@ -475,7 +475,7 @@ export function createBlankFlightPlan(): FlightPlan {
     flightRule: 'VFR',
     flightPeriod: 'Diurno',
     groundContingency: true,
-    operatorRemark: 'GOLD VIRTUAL AIRLINES',
+    operatorRemark: 'PARTICULAR',
     legs: [
       {
         id: `leg-${Date.now()}`,

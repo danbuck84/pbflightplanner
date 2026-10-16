@@ -402,7 +402,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
               onChange={(e) =>
                 onUpdatePlan((p) => ({ ...p, callsign: e.target.value.toUpperCase() }))
               }
-              placeholder="GLD1537"
+              placeholder="Ex: PR-DAN"
               className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 font-mono text-sm font-bold uppercase text-sky-600 dark:text-sky-400 focus:border-sky-500 focus:outline-none"
             />
           </div>
@@ -1349,7 +1349,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
             </div>
           </div>
 
-          {/* ATC Route & Remark Gold (Row 52) */}
+          {/* ATC Route & Remark (Row 52) */}
           <div className="space-y-2.5 lg:col-span-5">
             <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2">
               <div className="min-w-0 flex-1">

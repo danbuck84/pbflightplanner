@@ -122,7 +122,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
     setCustomCruiseIas(first?.defaultCruiseIasKts ?? 110);
     setCustomDescentIas(first?.defaultDescentIasKts ?? 110);
     setCustomDescentVs(first?.defaultDescentVsFpm ?? 600);
-    setCustomOperator('GOLD VIRTUAL AIRLINES');
+    setCustomOperator('PARTICULAR');
     setCustomNotes('');
     setShowPrefixForm(true);
   };
@@ -355,7 +355,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                 Meus Prefixos Particulares (Hangar do Comandante)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Cadastre suas matrículas (ex: <span className="font-mono">PR-DAN</span>, <span className="font-mono">PT-GLD</span>) vinculadas a uma Aeronave Base e personalize consumo, peso vazio e velocidades. Visível apenas na sua conta.
+                Cadastre suas matrículas (ex: <span className="font-mono">PR-DAN</span>, <span className="font-mono">PS-PBV</span>) vinculadas a uma Aeronave Base e personalize consumo, peso vazio e velocidades. Visível apenas na sua conta.
               </p>
             </div>
             <button
@@ -490,7 +490,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                     type="text"
                     value={customOperator}
                     onChange={(e) => setCustomOperator(e.target.value)}
-                    placeholder="GOLD VIRTUAL AIRLINES"
+                    placeholder="PARTICULAR"
                     className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs uppercase"
                   />
                 </div>
