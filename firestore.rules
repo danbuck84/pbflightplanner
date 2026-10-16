@@ -1,0 +1,311 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures for PBFlightPlanner:
+//
+// 1. Collection: users/{userId}
+//    Document ID: Firebase Auth UID
+//    Fields:
+//      - uid: string (optional, immutable, must match userId) - Owner UID
+//      - email: string (optional, valid email format, <= 254 chars) - User email (PII)
+//      - displayName / name: string (optional, <= 100 chars) - Pilot display name
+//      - photoURL: string (optional, <= 500 chars) - Profile avatar URL
+//      - role: string (optional, restricted to non-privileged roles) - User role
+//      - createdAt: timestamp or string (optional, immutable on update)
+//      - updatedAt: timestamp or string (optional)
+//
+// 2. Subcollection: users/{userId}/flightPlans/{planId}
+//    Document ID: Flight plan ID
+//    Fields:
+//      - id: string (optional, <= 128 chars)
+//      - uid / userId: string (optional, immutable, must match userId)
+//      - name / title: string (optional, <= 200 chars) - Flight plan title
+//      - departure / origin / departureIcao: string (optional, <= 20 chars)
+//      - destination / destinationIcao: string (optional, <= 20 chars)
+//      - alternate / alternateIcao: string (optional, <= 20 chars)
+//      - aircraftId / aircraftPrefix / registration: string (optional, <= 50 chars)
+//      - waypoints / legs: list (optional, <= 200 items) - Route legs/waypoints
+//      - notes / remarks: string (optional, <= 5000 chars)
+//      - createdAt: timestamp or string (optional, immutable on update)
+//      - updatedAt: timestamp or string (optional)
+//
+// 3. Subcollection: users/{userId}/fleet/{aircraftId}
+//    Document ID: Aircraft ID or registration prefix
+//    Fields:
+//      - id: string (optional, <= 128 chars)
+//      - uid / userId: string (optional, immutable, must match userId)
+//      - prefix / registration: string (optional, 1..20 chars) - Tail number / prefix
+//      - model / type / baseModelId: string (optional, <= 100 chars) - Aircraft model
+//      - name: string (optional, <= 100 chars)
+//      - cruiseSpeed / tas: number (optional, 0..2000)
+//      - fuelBurn / consumption: number (optional, 0..10000)
+//      - usableFuel / fuelCapacity: number (optional, 0..100000)
+//      - emptyWeight / maxTakeoffWeight / mtow: number (optional, 0..1000000)
+//      - createdAt: timestamp or string (optional, immutable on update)
+//      - updatedAt: timestamp or string (optional)
+//
+// 4. Subcollection: users/{userId}/customAerodromes/{aerodromeId}
+//    Document ID: Aerodrome ID or ICAO code
+//    Fields:
+//      - id: string (optional, <= 128 chars)
+//      - uid / userId: string (optional, immutable, must match userId)
+//      - icao / code / ident: string (optional, 2..10 chars) - Aerodrome identifier
+//      - name: string (optional, <= 200 chars) - Aerodrome name
+//      - city / state / country: string (optional, <= 100 chars)
+//      - lat / latitude: number (optional, -90..90)
+//      - lon / lng / longitude: number (optional, -180..180)
+//      - elevation / elev: number (optional, -2000..30000)
+//      - runways: list (optional, <= 20 items)
+//      - createdAt: timestamp or string (optional, immutable on update)
+//      - updatedAt: timestamp or string (optional)
+//
+// 5. Collection: catalog_aircraft/{aircraftId}
+//    Document ID: Aircraft catalog ID
+//    Access: Publicly readable; writable only by authenticated users.
+//    Fields: Same domain constraints as aircraft records.
+//
+// 6. Collection: catalog_aerodromes/{aerodromeId}
+//    Document ID: Aerodrome catalog ID / ICAO
+//    Access: Publicly readable; writable only by authenticated users.
+//    Fields: Same domain constraints as aerodrome records.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the resource (for user-owned documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Verify UID/userId fields haven't been tampered with on create
+    function uidUnchanged(userId) {
+      return (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
+             (!('userId' in request.resource.data) || request.resource.data.userId == userId) &&
+             (!('ownerId' in request.resource.data) || request.resource.data.ownerId == userId);
+    }
+
+    // Ensure UID/userId fields are not modified on update
+    function uidNotModified(userId) {
+      return (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
+             (!('userId' in request.resource.data) || request.resource.data.userId == userId) &&
+             (!('ownerId' in request.resource.data) || request.resource.data.ownerId == userId);
+    }
+
+    // Validate that immutable fields have not changed during an update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate optional string (if present and non-null, must be string within length bounds)
+    function isValidOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) || data[field] == null ||
+             (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
+    }
+
+    // Validate optional number within range
+    function isValidOptionalNumber(data, field, minVal, maxVal) {
+      return !(field in data) || data[field] == null ||
+             (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    // Validate optional list with max size limit
+    function isValidOptionalList(data, field, maxSize) {
+      return !(field in data) || data[field] == null ||
+             (data[field] is list && data[field].size() <= maxSize);
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+             email.size() >= 3 &&
+             email.size() <= 254 &&
+             email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update rules)
+    // ===============================================================
+
+    function isValidUserProfile(data) {
+      return data is map &&
+             data.keys().size() >= 1 &&
+             data.keys().size() <= 30 &&
+             // Prevent privilege escalation via self-assigned roles or admin flags
+             (!('role' in data) || data.role in ['user', 'pilot']) &&
+             (!('isAdmin' in data) || data.isAdmin == false) &&
+             (!('email' in data) || data.email == null || isValidEmail(data.email)) &&
+             isValidOptionalString(data, 'displayName', 0, 100) &&
+             isValidOptionalString(data, 'name', 0, 100) &&
+             isValidOptionalString(data, 'photoURL', 0, 500) &&
+             isValidOptionalString(data, 'license', 0, 50) &&
+             isValidOptionalString(data, 'anacCanac', 0, 50);
+    }
+
+    function isValidFlightPlan(data) {
+      return data is map &&
+             data.keys().size() >= 1 &&
+             data.keys().size() <= 60 &&
+             isValidOptionalString(data, 'id', 0, 128) &&
+             isValidOptionalString(data, 'name', 0, 200) &&
+             isValidOptionalString(data, 'title', 0, 200) &&
+             isValidOptionalString(data, 'departure', 0, 20) &&
+             isValidOptionalString(data, 'origin', 0, 20) &&
+             isValidOptionalString(data, 'departureIcao', 0, 20) &&
+             isValidOptionalString(data, 'destination', 0, 20) &&
+             isValidOptionalString(data, 'destinationIcao', 0, 20) &&
+             isValidOptionalString(data, 'alternate', 0, 20) &&
+             isValidOptionalString(data, 'alternateIcao', 0, 20) &&
+             isValidOptionalString(data, 'aircraftId', 0, 50) &&
+             isValidOptionalString(data, 'aircraftPrefix', 0, 50) &&
+             isValidOptionalString(data, 'registration', 0, 50) &&
+             isValidOptionalList(data, 'waypoints', 200) &&
+             isValidOptionalList(data, 'legs', 200) &&
+             isValidOptionalString(data, 'notes', 0, 5000) &&
+             isValidOptionalString(data, 'remarks', 0, 5000);
+    }
+
+    function isValidAircraft(data) {
+      return data is map &&
+             data.keys().size() >= 1 &&
+             data.keys().size() <= 50 &&
+             isValidOptionalString(data, 'id', 0, 128) &&
+             isValidOptionalString(data, 'prefix', 0, 20) &&
+             isValidOptionalString(data, 'registration', 0, 20) &&
+             isValidOptionalString(data, 'tailNumber', 0, 20) &&
+             isValidOptionalString(data, 'model', 0, 100) &&
+             isValidOptionalString(data, 'type', 0, 100) &&
+             isValidOptionalString(data, 'baseModelId', 0, 100) &&
+             isValidOptionalString(data, 'name', 0, 100) &&
+             isValidOptionalString(data, 'manufacturer', 0, 100) &&
+             isValidOptionalString(data, 'category', 0, 50) &&
+             isValidOptionalNumber(data, 'cruiseSpeed', 0, 2000) &&
+             isValidOptionalNumber(data, 'tas', 0, 2000) &&
+             isValidOptionalNumber(data, 'fuelBurn', 0, 10000) &&
+             isValidOptionalNumber(data, 'consumption', 0, 10000) &&
+             isValidOptionalNumber(data, 'usableFuel', 0, 100000) &&
+             isValidOptionalNumber(data, 'fuelCapacity', 0, 100000) &&
+             isValidOptionalNumber(data, 'emptyWeight', 0, 1000000) &&
+             isValidOptionalNumber(data, 'maxTakeoffWeight', 0, 1000000) &&
+             isValidOptionalNumber(data, 'mtow', 0, 1000000);
+    }
+
+    function isValidAerodrome(data) {
+      return data is map &&
+             data.keys().size() >= 1 &&
+             data.keys().size() <= 50 &&
+             isValidOptionalString(data, 'id', 0, 128) &&
+             isValidOptionalString(data, 'icao', 0, 10) &&
+             isValidOptionalString(data, 'code', 0, 10) &&
+             isValidOptionalString(data, 'ident', 0, 10) &&
+             isValidOptionalString(data, 'name', 0, 200) &&
+             isValidOptionalString(data, 'city', 0, 100) &&
+             isValidOptionalString(data, 'state', 0, 100) &&
+             isValidOptionalString(data, 'country', 0, 100) &&
+             isValidOptionalNumber(data, 'lat', -90, 90) &&
+             isValidOptionalNumber(data, 'latitude', -90, 90) &&
+             isValidOptionalNumber(data, 'lon', -180, 180) &&
+             isValidOptionalNumber(data, 'lng', -180, 180) &&
+             isValidOptionalNumber(data, 'longitude', -180, 180) &&
+             isValidOptionalNumber(data, 'elevation', -2000, 30000) &&
+             isValidOptionalNumber(data, 'elev', -2000, 30000) &&
+             isValidOptionalList(data, 'runways', 20);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. User profile documents and private user subcollections
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       uidUnchanged(userId) &&
+                       isValidUserProfile(request.resource.data);
+      allow update: if isOwner(userId) &&
+                       uidNotModified(userId) &&
+                       areImmutableFieldsUnchanged(['uid', 'createdAt']) &&
+                       isValidUserProfile(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      // 2. Private flight plans saved by the pilot
+      match /flightPlans/{planId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         uidUnchanged(userId) &&
+                         isValidFlightPlan(request.resource.data);
+        allow update: if isOwner(userId) &&
+                         uidNotModified(userId) &&
+                         areImmutableFieldsUnchanged(['uid', 'userId', 'ownerId', 'createdAt']) &&
+                         isValidFlightPlan(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // 3. Private aircraft prefixes/registrations created by the pilot
+      match /fleet/{aircraftId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         uidUnchanged(userId) &&
+                         isValidAircraft(request.resource.data);
+        allow update: if isOwner(userId) &&
+                         uidNotModified(userId) &&
+                         areImmutableFieldsUnchanged(['uid', 'userId', 'ownerId', 'createdAt']) &&
+                         isValidAircraft(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // 4. Private custom aerodromes saved by the pilot
+      match /customAerodromes/{aerodromeId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         uidUnchanged(userId) &&
+                         isValidAerodrome(request.resource.data);
+        allow update: if isOwner(userId) &&
+                         uidNotModified(userId) &&
+                         areImmutableFieldsUnchanged(['uid', 'userId', 'ownerId', 'createdAt']) &&
+                         isValidAerodrome(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // 5. Global base aircraft catalog modifications
+    match /catalog_aircraft/{aircraftId} {
+      allow get, list: if true;
+      allow create: if isAuthenticated() &&
+                       isValidAircraft(request.resource.data);
+      allow update: if isAuthenticated() &&
+                       areImmutableFieldsUnchanged(['createdAt']) &&
+                       isValidAircraft(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // 6. Global aerodrome catalog modifications
+    match /catalog_aerodromes/{aerodromeId} {
+      allow get, list: if true;
+      allow create: if isAuthenticated() &&
+                       isValidAerodrome(request.resource.data);
+      allow update: if isAuthenticated() &&
+                       areImmutableFieldsUnchanged(['createdAt']) &&
+                       isValidAerodrome(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // 7. Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
