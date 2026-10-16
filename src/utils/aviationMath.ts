@@ -616,34 +616,62 @@ export function computeDmeArcLeadDistanceNm(
 }
 
 /**
- * Parses a raw METAR string to extract wind direction (deg), wind speed (kt), and QNH (hPa)
+ * Parses a raw METAR string (and optional TAF string) to extract wind direction (deg), wind speed (kt), and QNH (hPa).
+ * If METAR wind is variable (VRB) or missing, automatically falls back to the METAR variation sector (e.g. 260V320)
+ * or the prevailing wind in the TAF (e.g. 26010KT).
  */
-export function parseMetarString(metar: string): {
+export function parseMetarString(
+  metar: string,
+  taf?: string
+): {
   windDirection: number | null;
   windSpeedKts: number | null;
   qnhHpa: number | null;
 } {
-  if (!metar || !metar.trim()) {
-    return { windDirection: null, windSpeedKts: null, qnhHpa: null };
-  }
-  const text = metar.toUpperCase();
+  const metarUpper = (metar || '').toUpperCase();
+  const tafUpper = (taf || '').toUpperCase();
 
   let windDirection: number | null = null;
   let windSpeedKts: number | null = null;
-  const windMatch = text.match(/\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?(?:KT|MPS)\b/);
-  if (windMatch) {
-    if (windMatch[1] !== 'VRB') {
-      windDirection = parseInt(windMatch[1], 10);
+
+  if (metarUpper.trim()) {
+    const windMatch = metarUpper.match(/\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?(?:KT|MPS)\b/);
+    if (windMatch) {
+      windSpeedKts = parseInt(windMatch[2], 10);
+      if (windMatch[1] !== 'VRB') {
+        windDirection = parseInt(windMatch[1], 10);
+      }
     }
-    windSpeedKts = parseInt(windMatch[2], 10);
+
+    // If windDirection is still null (e.g. VRB07KT), check for variation sector like 190V280 in METAR
+    if (windDirection === null) {
+      const varMatch = metarUpper.match(/\b(\d{3})V(\d{3})\b/);
+      if (varMatch) {
+        const d1 = parseInt(varMatch[1], 10);
+        const d2 = parseInt(varMatch[2], 10);
+        const diff = ((d2 - d1 + 360) % 360);
+        windDirection = Math.round((d1 + diff / 2) % 360);
+      }
+    }
+  }
+
+  // If windDirection is still null (e.g. VRB without sector, or no METAR), fallback to TAF wind
+  if (windDirection === null && tafUpper.trim()) {
+    const tafWindMatch = tafUpper.match(/\b(\d{3})(\d{2,3})(?:G\d{2,3})?(?:KT|MPS)\b/);
+    if (tafWindMatch) {
+      windDirection = parseInt(tafWindMatch[1], 10);
+      if (windSpeedKts === null) {
+        windSpeedKts = parseInt(tafWindMatch[2], 10);
+      }
+    }
   }
 
   let qnhHpa: number | null = null;
-  const qnhMatch = text.match(/\bQ(\d{4})\b/);
+  const qnhMatch = metarUpper.match(/\bQ(\d{4})\b/);
   if (qnhMatch) {
     qnhHpa = parseInt(qnhMatch[1], 10);
   } else {
-    const altimMatch = text.match(/\bA(\d{4})\b/);
+    const altimMatch = metarUpper.match(/\bA(\d{4})\b/);
     if (altimMatch) {
       qnhHpa = Math.round(parseInt(altimMatch[1], 10) * 0.3386389);
     }

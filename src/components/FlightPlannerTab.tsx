@@ -120,15 +120,16 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     metarText: string,
     tafText?: string
   ) => {
-    const parsed = parseMetarString(metarText);
     onUpdatePlan((prev) => {
       const current = prev[target];
+      const nextTaf = tafText !== undefined ? tafText : current.taf;
+      const parsed = parseMetarString(metarText, nextTaf);
       return {
         ...prev,
         [target]: {
           ...current,
           metar: metarText,
-          taf: tafText !== undefined ? tafText : current.taf,
+          taf: nextTaf,
           metarWindDirection:
             parsed.windDirection !== null ? parsed.windDirection : current.metarWindDirection,
           metarWindSpeedKts:
@@ -139,42 +140,175 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     });
   };
 
-  const handleFetchWeatherFor = async (target: 'origin' | 'destination' | 'alternate') => {
-    const icao = plan[target].icao.trim().toUpperCase();
-    if (!icao) return;
+  const handleFetchWeatherFor = async (
+    target: 'origin' | 'destination' | 'alternate',
+    overrideIcao?: string
+  ) => {
+    const icao = (overrideIcao ?? plan[target].icao).trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(icao)) return;
     setLoadingWeather((prev) => ({ ...prev, [target]: true }));
     try {
       const { metar, taf } = await fetchLiveMetarAndTaf(icao);
-      if (metar || taf) {
-        applyMetarParsedValues(
-          target,
-          metar || plan[target].metar,
-          taf || plan[target].taf
-        );
-      }
+      onUpdatePlan((prev) => {
+        const current = prev[target];
+        const nextMetar = metar || current.metar;
+        const nextTaf = taf || current.taf;
+        const parsed = parseMetarString(nextMetar, nextTaf);
+
+        // Fallback to Origin or Alternate wind/QNH if this aerodrome has no METAR station (e.g. SDUB)
+        const refWindDir =
+          prev.origin.metarWindDirection !== ''
+            ? prev.origin.metarWindDirection
+            : prev.alternate.metarWindDirection !== ''
+            ? prev.alternate.metarWindDirection
+            : prev.destination.metarWindDirection;
+        const refWindSpd =
+          prev.origin.metarWindSpeedKts !== ''
+            ? prev.origin.metarWindSpeedKts
+            : prev.alternate.metarWindSpeedKts !== ''
+            ? prev.alternate.metarWindSpeedKts
+            : prev.destination.metarWindSpeedKts;
+        const refQnh =
+          prev.origin.qnhHpa !== ''
+            ? prev.origin.qnhHpa
+            : prev.alternate.qnhHpa !== ''
+            ? prev.alternate.qnhHpa
+            : prev.destination.qnhHpa;
+
+        return {
+          ...prev,
+          [target]: {
+            ...current,
+            metar: nextMetar,
+            taf: nextTaf,
+            metarWindDirection:
+              parsed.windDirection !== null
+                ? parsed.windDirection
+                : current.metarWindDirection !== ''
+                ? current.metarWindDirection
+                : refWindDir,
+            metarWindSpeedKts:
+              parsed.windSpeedKts !== null
+                ? parsed.windSpeedKts
+                : current.metarWindSpeedKts !== ''
+                ? current.metarWindSpeedKts
+                : refWindSpd,
+            qnhHpa:
+              parsed.qnhHpa !== null
+                ? parsed.qnhHpa
+                : current.qnhHpa !== ''
+                ? current.qnhHpa
+                : refQnh,
+          },
+        };
+      });
     } finally {
       setLoadingWeather((prev) => ({ ...prev, [target]: false }));
     }
   };
 
   const handleFetchAllWeather = async () => {
-    await Promise.all([
-      handleFetchWeatherFor('origin'),
-      handleFetchWeatherFor('destination'),
-      handleFetchWeatherFor('alternate'),
-    ]);
+    const targets = ['origin', 'destination', 'alternate'] as const;
+    setLoadingWeather({ origin: true, destination: true, alternate: true });
+    try {
+      const results = await Promise.all(
+        targets.map(async (t) => {
+          const icao = plan[t].icao.trim().toUpperCase();
+          if (!/^[A-Z0-9]{4}$/.test(icao)) return { metar: '', taf: '' };
+          try {
+            return await fetchLiveMetarAndTaf(icao);
+          } catch {
+            return { metar: '', taf: '' };
+          }
+        })
+      );
+
+      onUpdatePlan((prev) => {
+        const nextOriginMetar = results[0].metar || prev.origin.metar;
+        const nextOriginTaf = results[0].taf || prev.origin.taf;
+        const pOrigin = parseMetarString(nextOriginMetar, nextOriginTaf);
+
+        const nextDestMetar = results[1].metar || prev.destination.metar;
+        const nextDestTaf = results[1].taf || prev.destination.taf;
+        const pDest = parseMetarString(nextDestMetar, nextDestTaf);
+
+        const nextAltMetar = results[2].metar || prev.alternate.metar;
+        const nextAltTaf = results[2].taf || prev.alternate.taf;
+        const pAlt = parseMetarString(nextAltMetar, nextAltTaf);
+
+        const fallbackWindDir =
+          pOrigin.windDirection ??
+          pAlt.windDirection ??
+          pDest.windDirection ??
+          (prev.origin.metarWindDirection !== '' ? prev.origin.metarWindDirection : '') ??
+          '';
+        const fallbackWindSpd =
+          pOrigin.windSpeedKts ??
+          pAlt.windSpeedKts ??
+          pDest.windSpeedKts ??
+          (prev.origin.metarWindSpeedKts !== '' ? prev.origin.metarWindSpeedKts : '') ??
+          '';
+        const fallbackQnh =
+          pOrigin.qnhHpa ??
+          pAlt.qnhHpa ??
+          pDest.qnhHpa ??
+          (prev.origin.qnhHpa !== '' ? prev.origin.qnhHpa : '') ??
+          '';
+
+        return {
+          ...prev,
+          origin: {
+            ...prev.origin,
+            metar: nextOriginMetar,
+            taf: nextOriginTaf,
+            metarWindDirection: pOrigin.windDirection ?? fallbackWindDir,
+            metarWindSpeedKts: pOrigin.windSpeedKts ?? fallbackWindSpd,
+            qnhHpa: pOrigin.qnhHpa ?? fallbackQnh,
+          },
+          destination: {
+            ...prev.destination,
+            metar: nextDestMetar,
+            taf: nextDestTaf,
+            metarWindDirection: pDest.windDirection ?? fallbackWindDir,
+            metarWindSpeedKts: pDest.windSpeedKts ?? fallbackWindSpd,
+            qnhHpa: pDest.qnhHpa ?? fallbackQnh,
+          },
+          alternate: {
+            ...prev.alternate,
+            metar: nextAltMetar,
+            taf: nextAltTaf,
+            metarWindDirection: pAlt.windDirection ?? fallbackWindDir,
+            metarWindSpeedKts: pAlt.windSpeedKts ?? fallbackWindSpd,
+            qnhHpa: pAlt.qnhHpa ?? fallbackQnh,
+          },
+        };
+      });
+    } finally {
+      setLoadingWeather({ origin: false, destination: false, alternate: false });
+    }
   };
 
   const handleAerodromeChange = (
     target: 'origin' | 'destination' | 'alternate',
     icao: string
   ) => {
+    const cleanIcao = icao.trim().toUpperCase();
     onUpdatePlan((prev) => {
+      const isDifferentIcao = prev[target].icao.trim().toUpperCase() !== cleanIcao;
       const updated = {
         ...prev,
         [target]: {
           ...prev[target],
           icao,
+          ...(isDifferentIcao
+            ? {
+                metar: '',
+                taf: '',
+                metarWindDirection: '' as const,
+                metarWindSpeedKts: '' as const,
+                qnhHpa: '' as const,
+              }
+            : {}),
         },
       };
       if (target === 'origin' && updated.legs.length > 0) {
@@ -189,6 +323,10 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
       }
       return updated;
     });
+
+    if (/^[A-Z0-9]{4}$/.test(cleanIcao)) {
+      void handleFetchWeatherFor(target, cleanIcao);
+    }
   };
 
   const handleAircraftSelectionChange = (val: string) => {
@@ -434,40 +572,73 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
     effectiveDescentSpeedAltKts
   );
 
+  const parsedOriginWeather = parseMetarString(plan.origin.metar, plan.origin.taf);
+  const parsedDestWeather = parseMetarString(plan.destination.metar, plan.destination.taf);
+  const parsedAltWeather = parseMetarString(plan.alternate.metar, plan.alternate.taf);
+
+  const rawWindOrigin: number | '' =
+    plan.origin.metarWindDirection !== ''
+      ? plan.origin.metarWindDirection
+      : parsedOriginWeather.windDirection ?? '';
+  const rawWindDest: number | '' =
+    plan.destination.metarWindDirection !== ''
+      ? plan.destination.metarWindDirection
+      : parsedDestWeather.windDirection ?? '';
+  const rawWindAlt: number | '' =
+    plan.alternate.metarWindDirection !== ''
+      ? plan.alternate.metarWindDirection
+      : parsedAltWeather.windDirection ?? '';
+
+  const fallbackAnyWind: number | '' =
+    rawWindOrigin !== '' ? rawWindOrigin : rawWindAlt !== '' ? rawWindAlt : rawWindDest;
+
+  const effectiveWindDirByAero: Record<'origin' | 'destination' | 'alternate', number | ''> = {
+    origin: rawWindOrigin !== '' ? rawWindOrigin : fallbackAnyWind,
+    destination: rawWindDest !== '' ? rawWindDest : fallbackAnyWind,
+    alternate: rawWindAlt !== '' ? rawWindAlt : fallbackAnyWind,
+  };
+
+  const rawQnhOrigin: number | '' =
+    plan.origin.qnhHpa !== '' ? plan.origin.qnhHpa : parsedOriginWeather.qnhHpa ?? '';
+  const rawQnhDest: number | '' =
+    plan.destination.qnhHpa !== '' ? plan.destination.qnhHpa : parsedDestWeather.qnhHpa ?? '';
+  const rawQnhAlt: number | '' =
+    plan.alternate.qnhHpa !== '' ? plan.alternate.qnhHpa : parsedAltWeather.qnhHpa ?? '';
+
+  const fallbackAnyQnh: number | '' =
+    rawQnhOrigin !== '' ? rawQnhOrigin : rawQnhAlt !== '' ? rawQnhAlt : rawQnhDest;
+
+  const effectiveQnhByAero: Record<'origin' | 'destination' | 'alternate', number | ''> = {
+    origin: rawQnhOrigin !== '' ? rawQnhOrigin : fallbackAnyQnh,
+    destination: rawQnhDest !== '' ? rawQnhDest : fallbackAnyQnh,
+    alternate: rawQnhAlt !== '' ? rawQnhAlt : fallbackAnyQnh,
+  };
+
   const rwyOrigin = computeActiveRunway(
     originAerodrome?.runway1 || '',
     originAerodrome?.runway2 || '',
-    plan.origin.metarWindDirection,
+    effectiveWindDirByAero.origin,
     plan.origin.magneticDeclination !== '' ? plan.origin.magneticDeclination : -21
   );
   const rwyDest = computeActiveRunway(
     destinationAerodrome?.runway1 || '',
     destinationAerodrome?.runway2 || '',
-    plan.destination.metarWindDirection !== ''
-      ? plan.destination.metarWindDirection
-      : plan.origin.metarWindDirection || plan.alternate.metarWindDirection,
+    effectiveWindDirByAero.destination,
     plan.destination.magneticDeclination !== '' ? plan.destination.magneticDeclination : -21
   );
   const rwyAlt = computeActiveRunway(
     alternateAerodrome?.runway1 || '',
     alternateAerodrome?.runway2 || '',
-    plan.alternate.metarWindDirection,
+    effectiveWindDirByAero.alternate,
     plan.alternate.magneticDeclination !== '' ? plan.alternate.magneticDeclination : -21
   );
 
-  const effectiveDestQnhHpa =
-    plan.destination.qnhHpa !== ''
-      ? plan.destination.qnhHpa
-      : plan.origin.qnhHpa !== ''
-      ? plan.origin.qnhHpa
-      : plan.alternate.qnhHpa;
-
   const tlDest = computeTransitionLevel(
-    effectiveDestQnhHpa,
+    effectiveQnhByAero.destination,
     plan.destination.transitionAltitudeFt || 6000
   );
   const tlAlt = computeTransitionLevel(
-    plan.alternate.qnhHpa,
+    effectiveQnhByAero.alternate,
     plan.alternate.transitionAltitudeFt || 6000
   );
 
@@ -667,12 +838,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   <input
                     type="text"
                     value={cfg.taf}
-                    onChange={(e) =>
-                      onUpdatePlan((p) => ({
-                        ...p,
-                        [key]: { ...p[key], taf: e.target.value },
-                      }))
-                    }
+                    onChange={(e) => applyMetarParsedValues(key, cfg.metar, e.target.value)}
                     placeholder={`TAF ${cfg.icao || 'XXXX'}...`}
                     className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 font-mono text-xs text-slate-800 dark:text-slate-200"
                   />
@@ -1903,7 +2069,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                           type="number"
                           min={0}
                           max={360}
-                          value={plan[key].metarWindDirection}
+                          value={effectiveWindDirByAero[key]}
                           onChange={(e) =>
                             onUpdatePlan((p) => ({
                               ...p,
@@ -1990,7 +2156,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                       <td key={key} className="py-1.5">
                         <input
                           type="number"
-                          value={plan[key].qnhHpa}
+                          value={effectiveQnhByAero[key]}
                           onChange={(e) =>
                             onUpdatePlan((p) => ({
                               ...p,
@@ -2009,7 +2175,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                   <tr>
                     <td className="py-2 text-left text-slate-500">Equiv. em POL (inHg):</td>
                     {(['origin', 'destination', 'alternate'] as const).map((key) => {
-                      const inHg = convertHpaToInHg(plan[key].qnhHpa);
+                      const inHg = convertHpaToInHg(effectiveQnhByAero[key]);
                       return (
                         <td key={key} className="py-2 font-mono font-semibold text-sky-600 dark:text-sky-400">
                           {inHg !== null ? inHg.toFixed(2) : '—'}
@@ -2074,7 +2240,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </div>
                 <div className="mt-1 text-[10px] text-slate-500">
                   TA: {plan.destination.transitionAltitudeFt || 6000} ft • QNH:{' '}
-                  {effectiveDestQnhHpa || '—'}
+                  {effectiveQnhByAero.destination || '—'}
                 </div>
               </div>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-center">
@@ -2086,7 +2252,7 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </div>
                 <div className="mt-1 text-[10px] text-slate-500">
                   TA: {plan.alternate.transitionAltitudeFt || 6000} ft • QNH:{' '}
-                  {plan.alternate.qnhHpa || '—'}
+                  {effectiveQnhByAero.alternate || '—'}
                 </div>
               </div>
             </div>
