@@ -142,6 +142,16 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
     setShowPrefixForm(true);
   };
 
+  const normalizeCapacityLiters = (raw: string): string => {
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    // If the user typed only digits/dots/commas (e.g., "348"), append " litros"
+    if (/^[\d.,\s]+$/.test(trimmed)) {
+      return `${trimmed} litros`;
+    }
+    return trimmed;
+  };
+
   const handleSubmitPrefix = (e: React.FormEvent) => {
     e.preventDefault();
     const base = baseAircraftList.find((b) => b.id === selectedBaseIdForPrefix) || baseAircraftList[0];
@@ -157,7 +167,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
       wakeTurbulence: base.wakeTurbulence,
       performanceCategory: base.performanceCategory,
       fuelConsumptionLph: Number(customFuelLph) || 0,
-      fuelCapacityDisplay: customCapacity.trim(),
+      fuelCapacityDisplay: normalizeCapacityLiters(customCapacity),
       emptyWeightKg: Number(customEmptyWeight) || 0,
       propulsionType: base.propulsionType,
       defaultCruiseIasKts: Number(customCruiseIas) || 110,
@@ -217,7 +227,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
       wakeTurbulence: baseWake,
       performanceCategory: basePer,
       fuelConsumptionLph: Number(baseFuelLph) || 0,
-      fuelCapacityDisplay: baseCapacity.trim(),
+      fuelCapacityDisplay: normalizeCapacityLiters(baseCapacity),
       emptyWeightKg: Number(baseEmptyKg) || 0,
       propulsionType: basePropulsion,
       defaultCruiseIasKts: Number(baseCruiseIas) || 110,
@@ -331,7 +341,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
         ) : (
           <div className="flex items-center gap-1.5 rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-4 w-4" />
-            <span>Modo Admin Ativo (pbadmin)</span>
+            <span>Modo Admin Ativo</span>
           </div>
         )}
       </div>
@@ -417,12 +427,13 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Capacidade de Combustível
+                    Capacidade de Combustível (litros)
                   </label>
                   <input
                     type="text"
                     value={customCapacity}
                     onChange={(e) => setCustomCapacity(e.target.value)}
+                    placeholder="Ex: 212 litros"
                     className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs"
                   />
                 </div>
@@ -592,7 +603,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Aeronaves padrão disponíveis para todos os pilotos.{' '}
                 {isAdmin
-                  ? 'Como Admin (pbadmin), você pode adicionar, editar ou remover aeronaves base.'
+                  ? 'Como Admin, você pode adicionar, editar ou remover aeronaves base.'
                   : 'Somente leitura para usuários padrão (gerenciado pelo Admin).'}
               </p>
             </div>
@@ -686,11 +697,12 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium">Capacidade</label>
+                  <label className="block text-xs font-medium">Capacidade (litros)</label>
                   <input
                     type="text"
                     value={baseCapacity}
                     onChange={(e) => setBaseCapacity(e.target.value)}
+                    placeholder="Ex: 348 litros"
                     className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs"
                   />
                 </div>
@@ -742,7 +754,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                   <th className="py-2.5 px-3">Tipo/ICAO/Est. Turb.</th>
                   <th className="py-2.5 px-3">PER</th>
                   <th className="py-2.5 px-3">Consumo (L/h)</th>
-                  <th className="py-2.5 px-3">Capacidade</th>
+                  <th className="py-2.5 px-3">Capacidade (litros)</th>
                   <th className="py-2.5 px-3">Peso Vazio (kg)</th>
                   <th className="py-2.5 px-3">Regra CT</th>
                   <th className="py-2.5 px-3 text-right">Ações</th>
@@ -762,7 +774,7 @@ export const FleetAndAerodromesTab: React.FC<FleetAndAerodromesTabProps> = ({
                     </td>
                     <td className="py-2.5 px-3 font-mono">{ac.performanceCategory}</td>
                     <td className="py-2.5 px-3 font-mono">{ac.fuelConsumptionLph}</td>
-                    <td className="py-2.5 px-3">{ac.fuelCapacityDisplay}</td>
+                    <td className="py-2.5 px-3">{normalizeCapacityLiters(ac.fuelCapacityDisplay)}</td>
                     <td className="py-2.5 px-3 font-mono">{ac.emptyWeightKg.toLocaleString('pt-BR')}</td>
                     <td className="py-2.5 px-3">{ac.propulsionType}</td>
                     <td className="py-2.5 px-3 text-right">

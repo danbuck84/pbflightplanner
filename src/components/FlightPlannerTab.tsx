@@ -606,9 +606,11 @@ export const FlightPlannerTab: React.FC<FlightPlannerTabProps> = ({
                 </div>
               </div>
               <div className="col-span-2 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
-                <div className="text-[10px] text-slate-400">Capacidade Máxima</div>
+                <div className="text-[10px] text-slate-400">Capacidade de Combustível (litros)</div>
                 <div className="mt-0.5 font-mono font-semibold">
-                  {activeAircraft.fuelCapacityDisplay}
+                  {/^[\d.,\s]+$/.test(activeAircraft.fuelCapacityDisplay.trim())
+                    ? `${activeAircraft.fuelCapacityDisplay.trim()} litros`
+                    : activeAircraft.fuelCapacityDisplay}
                 </div>
               </div>
             </div>

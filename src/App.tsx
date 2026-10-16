@@ -833,13 +833,13 @@ export const App: React.FC = () => {
                 className="flex items-center gap-1 rounded-xl bg-amber-500/15 px-2.5 py-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/25"
               >
                 <ShieldCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">pbadmin</span>
+                <span className="hidden sm:inline">Admin</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowAdminModal(true)}
-                title="Acesso Administrativo (pbadmin)"
+                title="Acesso Administrativo"
                 className="rounded-xl border border-slate-300 dark:border-slate-700 p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white"
               >
                 <Lock className="h-4 w-4" />
@@ -1207,7 +1207,7 @@ export const App: React.FC = () => {
                   required
                   value={adminUser}
                   onChange={(e) => setAdminUser(e.target.value)}
-                  placeholder="pbadmin"
+                  placeholder="Usuário Admin"
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 font-mono text-xs"
                 />
               </div>
